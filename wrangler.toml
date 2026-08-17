@@ -1,4 +1,4 @@
-name = "hirebeat-recruiting-d1-v1-schema"
+name = "hirebeat-recruiting-d1-v2-schema"
 compatibility_date = "2026-08-17"
 
 [[d1_databases]]
