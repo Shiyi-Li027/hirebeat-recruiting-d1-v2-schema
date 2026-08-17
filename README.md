@@ -55,6 +55,33 @@ The platform separates:
 - hiring stage execution and transitions;
 - Offer draft, version, and lifecycle history.
 
+## Raw resume object storage / 原始简历对象存储
+
+A private Cloudflare R2 bucket has been provisioned for original resume PDF files. D1 stores only the corresponding object key, file integrity hash, file metadata, and extracted resume text.
+
+已经为原始简历 PDF 配置了一个私有 Cloudflare R2 Bucket。D1 不保存 PDF BLOB，只保存对应的对象键、文件完整性哈希、文件元数据和解析后的简历文本。
+
+| Item | Value |
+|---|---|
+| R2 bucket | `hirebeat-hr-raw-resumes-pdf-r2-v1` |
+| Worker binding | `hirebeat_hr_raw_resumes_pdf_r2_v1` |
+| Storage class | Standard |
+| D1 reference table | `raw_submission_resume` |
+| D1 object-key column | `resume_r2_object_key` |
+| D1 file-hash column | `resume_file_sha256` |
+| Current infrastructure status | Bucket created and Wrangler binding configured |
+| Current application status | PDF upload and parsing Worker not yet implemented |
+
+Responsibility boundary:
+
+- R2 stores the original PDF binary.
+- `raw_submission_resume.resume_r2_object_key` identifies the corresponding R2 object.
+- `raw_submission_resume.resume_file_sha256` verifies original-file integrity.
+- `raw_submission_resume.resume_text` stores extracted UTF-8 text when parsing succeeds.
+- R2 object bytes are not duplicated into D1.
+- The bucket remains private; resumes must not be exposed through a public bucket URL.
+- The upcoming production Ingress adapter will idempotently upload the PDF to R2 first, then use a short D1 transaction to publish the Raw metadata, intake status, and Workflow A Outbox event.
+
 ## Confirmed schema groups / 已确认分组
 
 | Group | Scope | Tables |
@@ -116,6 +143,7 @@ The canonical deployment entry point is the ordered set of files in `migrations/
 - Node.js and npm
 - Python 3
 - A Cloudflare account with D1 access
+- A private Cloudflare R2 bucket for original resume PDFs
 - Wrangler authentication for local administration
 - A GitHub repository for automated remote deployment
 

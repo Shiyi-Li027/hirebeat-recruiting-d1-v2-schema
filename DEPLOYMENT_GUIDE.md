@@ -51,6 +51,67 @@ npm run schema:validate
 0 FK violations
 ```
 
+## Cloudflare R2 原始简历 Bucket
+
+### 当前资源
+
+```text
+Bucket name:
+hirebeat-hr-raw-resumes-pdf-r2-v1
+
+Wrangler binding:
+hirebeat_hr_raw_resumes_pdf_r2_v1
+
+Storage class:
+Standard
+```
+
+该 Bucket 用于保存原始简历 PDF。D1 的 `raw_submission_resume` 表保存对应的 object key、文件 SHA-256、文件 metadata 和解析文本，不保存 PDF BLOB。
+
+### 首次创建 Bucket
+
+如果目标 Cloudflare Account 中还不存在该 Bucket：
+
+```bash
+npx wrangler r2 bucket create hirebeat-hr-raw-resumes-pdf-r2-v1
+```
+
+不要对已经存在的 Bucket 重复执行创建命令。
+
+### 查询 Bucket
+
+```bash
+npx wrangler r2 bucket list
+```
+
+预期结果应包含：
+
+```text
+hirebeat-hr-raw-resumes-pdf-r2-v1
+```
+
+### Wrangler binding
+
+`wrangler.toml` 必须包含：
+
+```toml
+[[r2_buckets]]
+binding = "hirebeat_hr_raw_resumes_pdf_r2_v1"
+bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
+```
+
+### 安全和职责边界
+
+- Bucket 保持 private。
+- 不在 GitHub 中保存 Cloudflare API Token。
+- 不把简历对象暴露为公开 URL。
+- D1 只保存 object key、文件 metadata、SHA-256 和解析文本，不保存 PDF binary。
+- 上传 Worker 必须验证 MIME type、文件大小和 SHA-256。
+- object key 不应包含候选人姓名、邮箱或其他明文 PII。
+- R2 PUT 必须幂等。
+- R2 与 D1 不构成跨产品 ACID 事务。
+- R2 上传成功后，再使用短 D1 transaction 发布 Raw metadata、intake 状态和 Workflow A Outbox event。
+
 ## 4. 创建新的 Cloudflare D1 database
 
 先登录 Cloudflare：

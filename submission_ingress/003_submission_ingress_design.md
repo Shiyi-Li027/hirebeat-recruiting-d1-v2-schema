@@ -34,7 +34,7 @@ Person/Application/Candidate 创建
 ML 或 Offer
 ```
 
-这里的 Resume PDF→text 是 Ingress adapter 在最终 Raw 发布前完成的技术准备，不是 Workflow A 内的结构化 Resume extraction。Workflow A 仍负责 Initial Cleaning、normalization，以及 identity/education/employment/skill/project 等结构化提取。
+这里的 Resume PDF→text 是 Ingress adapter 在最终 Raw 发布前完成的技术准备，不是 Workflow A 内的结构化 Resume extraction。Workflow A 仍负责 Initial Cleaning、normalization，以及 identity/education/employment/skill/project 等结构化提取。R2 与 D1 不能组成同一个跨产品 ACID 事务。生产 Ingress 必须采用幂等 object key、文件 SHA-256、可重试的 R2 PUT，以及最终 D1 短事务来避免重复对象和半完成业务发布。
 
 ## 2. 为什么需要 `raw_submission_intake_run`
 
@@ -299,7 +299,9 @@ resume_r2_object_key
 
 Raw 与 Resume child 允许在文本为 NULL 时完整落地。Workflow A Initial Cleaning 根据终结状态、有效字符长度和其他业务验证决定是否继续；`no_resume`、终结性不可解析或有效文本不足会保留 Raw/Resume 和清理结果，但不创建 `submission_normalized`。
 
-`resume_r2_object_key` 为未来 R2 原始 PDF 预留普通 TEXT；D1 不保存 PDF BLOB。当前没有 R2 时允许 NULL。
+`resume_r2_object_key` 是已创建的私有 Cloudflare R2 Bucket 中原始 Resume PDF 的对象键。当前 Bucket 为 `hirebeat-hr-raw-resumes-pdf-r2-v1`，Worker binding 为 `hirebeat_hr_raw_resumes_pdf_r2_v1`。D1 不保存 PDF BLOB；`raw_submission_resume` 只保存 object key、文件 metadata、`resume_file_sha256` 和解析后的 UTF-8 Resume 文本。
+
+当前基础设施状态为：R2 Bucket 已创建、Wrangler binding 已配置、D1 文件完整性字段和唯一 object-key 索引已定义；PDF 上传、解析和 D1/R2 协调写入的生产 Ingress Worker 尚待实现。`resume_r2_object_key` 在首版及生产 Ingress Worker 完成后都保持 nullable，因为直接提供 Resume text、没有 Resume、终结性解析失败或历史记录等合法情况可能不存在对应的 R2 PDF 对象。对于实际包含原始 PDF 的成功 Ingress，生产代码必须写入唯一 object key 和对应的 `resume_file_sha256`。
 
 ### 内容完整性
 
