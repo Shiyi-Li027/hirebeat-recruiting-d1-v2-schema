@@ -190,7 +190,7 @@ Settings
 1. checkout repository；
 2. 用 SQLite 内存数据库验证 82 张表、116 个索引和外键；
 3. 检查 `wrangler.toml` 已无占位符；
-4. 使用官方 `cloudflare/wrangler-action@v3`；
+4. 使用官方 `cloudflare/wrangler-action@v4`；
 5. 执行 `wrangler d1 migrations apply DB --remote`。
 
 D1 只会执行尚未登记在 `d1_migrations` 中的 migration。同一个 migration 不会因为每次 push 而重复建表。
