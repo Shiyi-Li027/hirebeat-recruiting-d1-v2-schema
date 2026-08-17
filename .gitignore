@@ -1,0 +1,19 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+service-account.json
+service-account*.json
+**/service-account.json
+**/service-account*.json
+.DS_Store
+*.sqlite
+*.sqlite3
+
+# Local generated files
+__pycache__/
+*.py[cod]
+.Rhistory
+.RData

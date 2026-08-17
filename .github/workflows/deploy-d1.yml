@@ -1,0 +1,38 @@
+name: Validate and deploy D1 migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "migrations/**"
+      - "wrangler.toml"
+      - "scripts/validate_schema.py"
+      - ".github/workflows/deploy-d1.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hirebeat-d1-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  validate-and-deploy:
+    name: Validate schema and apply remote migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate generated schema and deployment configuration
+        run: python3 scripts/validate_schema.py --check-config
+
+      - name: Apply unapplied migrations to Cloudflare D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply DB --remote

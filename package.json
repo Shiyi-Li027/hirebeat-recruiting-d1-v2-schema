@@ -1,0 +1,16 @@
+{
+  "name": "hirebeat-d1-schema",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "schema:build": "python3 scripts/build_schema_artifacts.py",
+    "schema:validate": "python3 scripts/validate_schema.py",
+    "d1:migrations:list:local": "wrangler d1 migrations list DB --local",
+    "d1:migrations:apply:local": "wrangler d1 migrations apply DB --local",
+    "d1:migrations:list:remote": "wrangler d1 migrations list DB --remote",
+    "d1:migrations:apply:remote": "wrangler d1 migrations apply DB --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

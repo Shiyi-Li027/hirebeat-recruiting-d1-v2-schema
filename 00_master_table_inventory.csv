@@ -1,0 +1,116 @@
+group_order,group_code,group_name,table_name,schema_scope,design_status,origin,primary_purpose,state_machine,outbox_role,key_dependencies,replacement_or_note
+1,G01,shared_reference,function,initial,confirmed,old_modified,Job function taxonomy,no,no,,Retained from Function
+1,G01,shared_reference,seniority,initial,confirmed,old_modified,Seniority taxonomy,no,no,,Retained from Seniority
+1,G01,shared_reference,contact_type,initial,confirmed,old_modified,Person contact channel taxonomy,no,no,,Retained from Contact_type
+1,G01,shared_reference,skill_type,initial,confirmed,old_modified,Skill category taxonomy,no,no,,Retained from Skill_type
+1,G01,shared_reference,skill,initial,confirmed,old_modified,Canonical skill catalog,no,no,,One canonical row per normalized skill name; type moved to bridge
+1,G01,shared_reference,skill_type_assignment,initial,confirmed,new,Many-to-many assignment between skills and skill types,no,no,skill|skill_type,Replaces Skill.skill_type_id and prevents cross-type duplicate Skill rows
+1,G01,shared_reference,skill_proficiency_level,initial,confirmed,old_modified,Skill proficiency taxonomy,no,no,,Retained from Skill_proficiency_level
+1,G01,shared_reference,certification_type,initial,confirmed,old_modified,Certification category,no,no,,Retained by explicit decision
+1,G01,shared_reference,issuing_organization,initial,confirmed,old_modified,Certification issuer catalog,no,no,,Retained by explicit decision
+1,G01,shared_reference,certification,initial,confirmed,old_modified,Canonical certification catalog,no,no,certification_type|issuing_organization,Retained by explicit decision
+1,G01,shared_reference,country,initial,confirmed,old_modified,Country reference,no,no,,Retained from Country
+1,G01,shared_reference,state,initial,confirmed,old_modified,State/province reference,no,no,country,Region layer removed
+1,G01,shared_reference,city,initial,confirmed,old_modified,City reference,no,no,state,Retained from City
+1,G01,shared_reference,location,initial,confirmed,old_modified,Reusable location record,no,no,country|state|city,Region and timezone references removed
+1,G01,shared_reference,degree,initial,confirmed,old_modified,Normalized degree category,no,no,,Retained from Degree
+1,G01,shared_reference,field_study,initial,confirmed,old_modified,Field of study taxonomy,no,no,,Retained from Field_study
+1,G01,shared_reference,major,initial,confirmed,old_modified,Major taxonomy,no,no,field_study,Retained from Major
+1,G01,shared_reference,school,initial,confirmed,old_modified,Canonical school catalog,no,no,,Retained from School
+1,G01,shared_reference,work_mode,initial,confirmed,new,Canonical onsite/hybrid/remote taxonomy,no,no,,Replaces free-text work-mode repetition
+1,G01,shared_reference,position_employment_type,initial,confirmed,old_modified,Employment type taxonomy,no,no,,Retained from Position_employment_type
+1,G01,shared_reference,position_occupational_type,initial,confirmed,old_modified,Occupation taxonomy,no,no,,Retained by explicit decision
+2,G02,recruitment_catalog,company,initial,confirmed,old_and_teammate_modified,Authoritative company catalog,limited,producer,,Teammate auto-create behavior removed
+2,G02,recruitment_catalog,company_contact_info,initial,confirmed,old_modified,Company recruiting contacts,no,no,company,Zero rows when no contact value exists; contact type nullable
+2,G02,recruitment_catalog,company_work_mode,initial,confirmed,old_modified,Company-level allowed work modes,limited,producer,company|work_mode,Normalized work-mode relationship with active semantics
+2,G02,recruitment_catalog,position,initial,confirmed,old_and_teammate_modified,Authoritative job-position catalog,yes,producer,company|function|seniority|location|position_employment_type|position_occupational_type,Replaces teammate roles and removes Experience_level
+2,G02,recruitment_catalog,position_salary_range,initial,confirmed,old_modified,Position compensation range,no,no,position,Optional child with currency and period
+2,G02,recruitment_catalog,position_skill,initial,confirmed,old_modified,Position skill requirements,no,no,position|skill|skill_proficiency_level,Uses canonical multi-type Skill identity
+2,G02,recruitment_catalog,position_education_requirement,initial,confirmed,old_modified,Position education requirements,no,no,position|degree|field_study,Required or preferred relationship
+2,G02,recruitment_catalog,position_certification_requirement,initial,confirmed,old_modified,Position certification requirements,no,no,position|certification,Required or preferred relationship
+2,G02,recruitment_catalog,catalog_revision,initial,confirmed,new,Immutable revision of selectable catalog,no,producer,company|company_work_mode|position,Created only when effective selectable option tree changes
+2,G02,recruitment_catalog,catalog_sync_run,initial,confirmed,new,One selected-target catalog synchronization run,yes,consumer,catalog_revision|outbox_event,Target subset may contain Airtable Google Form or both; Outbox FK deferred to G04
+2,G02,recruitment_catalog,catalog_sync_target_run,initial,confirmed,new,Per selected Airtable/Google target result,yes,no,catalog_sync_run,Closed channels create no target row
+3,G03,submission_ingress,raw_submission_intake_run,initial,confirmed,new,One logical raw-source-event receipt idempotency and technical-redelivery summary,yes,producer,outbox_event,Technical redelivery is not applicant-level duplicate submission; terminal null Resume still publishes Raw and Workflow A performs the business block
+3,G03,submission_ingress,raw_submission,initial,confirmed,old_and_teammate_replaced,Faithful structured source submission snapshot,immutable,producer,raw_submission_intake_run,Resume long text and file metadata are vertically separated; submitted catalog IDs and names remain non-FK values
+3,G03,submission_ingress,raw_submission_resume,initial,confirmed,new,One terminal Resume intake result and optional long text for one Raw submission,limited,no,raw_submission,One-to-one Raw child; stores text status origin parser version hash parsed time and file metadata; temporary parser errors remain in intake run and do not become permanent business blocks
+4,G04,workflow_control,etl_workflow_run,initial,confirmed,new,Durable business workflow run record,yes,producer,raw_submission|application|outbox_event,Every formal Workflow A/B run has one NOT NULL UNIQUE triggering Outbox FK
+4,G04,workflow_control,etl_step_run,initial,confirmed,new,Logical workflow-step state,yes,no,etl_workflow_run,One row per logical step
+4,G04,workflow_control,etl_step_attempt,initial,confirmed,new,One row per technical retry or compensation attempt,terminal_immutable,no,etl_step_run,Inserted running and finalized once; separates technical retries from applicant resubmissions
+4,G04,workflow_control,outbox_event,initial,confirmed,new,Reliable asynchronous handoff,yes,producer_consumer,etl_workflow_run,Transactional outbox with lease and minimal non-PII payload
+4,G04,workflow_control,audit_event,initial,confirmed,new,Immutable important business/admin change log,append_only,no,,Does not duplicate step error logs
+5,G05,submission_processing,normalization_run,initial,confirmed,new,Normalization execution/version/error record,yes,no,raw_submission|etl_workflow_run,Separates execution metadata from normalized data
+5,G05,submission_processing,submission_normalized,initial,confirmed,old_modified,Normalized submission business fields,versioned,no,raw_submission|normalization_run|company|company_work_mode|position,Stores full normalized email only and explicit requested start year-month; position work mode deferred; removes cluster/cycle foreign keys
+5,G05,submission_processing,resume_extraction,initial,confirmed,old_and_teammate_modified,Versioned structured Resume extraction run and input provenance,yes,no,submission_normalized|raw_submission_resume|etl_step_run,Does not duplicate Resume long text; freezes Raw Resume FK input hash and extraction version
+5,G05,submission_processing,resume_education,initial,confirmed,old_modified,Extracted education entries,append_only,no,resume_extraction,Rejected candidates remain in extraction; highest degree is computed only during Workflow B publish
+5,G05,submission_processing,resume_employment,initial,confirmed,old_modified,Extracted employment entries,append_only,no,resume_extraction,Eligible publish candidate requires start or end date; rejected candidates remain in extraction
+5,G05,submission_processing,resume_skill,initial,confirmed,new,Extracted skill entries,append_only,no,resume_extraction|skill,Replaces CSV-only skill extraction and resolves types through skill_type_assignment
+5,G05,submission_processing,resume_project,initial,confirmed,new,Extracted project entries,append_only,no,resume_extraction,Replaces CSV-only project extraction; date and URL remain optional
+5,G05,submission_processing,submission_identity_feature,initial,confirmed,old_merged,Normalized identity signals for dedup,append_only,no,submission_normalized|resume_extraction,Merges Resume_external_identifier and preserves selected additional ambiguous or rejected candidates
+6,G06,dedup_admission,submission_dedup_run,initial,confirmed,old_replaced,One dedup execution and Application admission decision for one target submission,yes,no,submission_normalized|etl_workflow_run|company|position,Separates dedup decision from Application entry decision and stores only one selected prior pointer
+6,G06,dedup_admission,submission_dedup_match,initial,confirmed,new,One positive target-to-historical matched submission pair,append_only,no,submission_dedup_run|submission_normalized,Models one-to-many positive matches without storing every negative comparison
+6,G06,dedup_admission,submission_match_evidence,initial,confirmed,old_modified,One keyed-HMAC identity evidence item for a positive submission pair,append_only,no,submission_dedup_match|submission_identity_feature,Removes matched Application and person-claim references and does not repeat bare identity values
+7,G07,application_core,person,initial,confirmed,old_and_teammate_modified,Long-lived canonical person profile with current cache pointers,limited,no,,Exact normalized email is the v1 Person identity key and is unique among non-merged Person rows
+7,G07,application_core,person_name,initial,confirmed,old_modified,Normalized person name history,append_only,no,person|candidate_snapshot,Different names under the same email are retained; no placeholder row when absent
+7,G07,application_core,person_contact,initial,confirmed,old_modified,Normalized email and phone history,append_only,no,person|contact_type|candidate_snapshot,Person contact type is required and sensitive lookup evidence uses keyed HMAC
+7,G07,application_core,person_link,initial,confirmed,old_modified,Normalized external profile link history,append_only,no,person|candidate_snapshot,LinkedIn and GitHub history without raw identity duplication
+7,G07,application_core,application,initial,confirmed,old_and_teammate_modified,One admitted application attempt with lifecycle decision fence and catalog snapshots,yes,producer,person|company|company_work_mode|position,Each legal resubmission creates a new row; offer-created attempts cannot be superseded
+7,G07,application_core,application_source_lineage,initial,confirmed,old_replaced,Application-to-source lineage with primary decision input,append_only,no,application,Upstream Submission IDs are plain integers without hard cross-layer FK
+7,G07,application_core,candidate_snapshot,initial,confirmed,old_modified,Application-time normalized candidate core snapshot,immutable,no,application|person,One core snapshot per Application and no raw resume or raw PII duplication
+8,G08,candidate_profile,education,initial,confirmed,old_modified,One immutable structured education-content version,append_only,no,degree|school|field_study|major,Raw segment remains in education_description; degree required and other mappings nullable
+8,G08,candidate_profile,person_education,initial,confirmed,old_modified,Person-owned reusable education fact and first source,append_only,no,person|education|candidate_snapshot,Same person plus content hash reuses fact and supports highest pointer
+8,G08,candidate_profile,candidate_education,initial,confirmed,old_modified,Candidate education membership and source snapshot,append_only,no,candidate_snapshot|person_education,At most one highest by partial unique index and exactly one enforced during publish
+8,G08,candidate_profile,person_position,initial,confirmed,old_modified,Immutable Person employment-history content version,append_only,no,person|company|position|candidate_snapshot,At least one date required; past Catalog mappings may be NULL
+8,G08,candidate_profile,candidate_position,initial,confirmed,old_modified,Candidate employment membership and source snapshot,append_only,no,candidate_snapshot|person_position,Allows multiple current positions but one non-null primary-current flag
+8,G08,candidate_profile,person_skill,initial,confirmed,old_modified,One current Person summary per authoritative Skill,limited,no,person|skill|candidate_snapshot,Candidate bridge freezes per-application values
+8,G08,candidate_profile,candidate_skill,initial,confirmed,old_modified,Candidate skill membership source and proficiency snapshot,append_only,no,candidate_snapshot|person_skill,Only eligible Catalog-mapped skills publish
+8,G08,candidate_profile,person_project,initial,confirmed,old_modified,Immutable Person project-content version,append_only,no,person|candidate_snapshot,Same content hash reuses; changed content creates a new version
+8,G08,candidate_profile,candidate_project,initial,confirmed,old_added,Candidate project membership and source snapshot,append_only,no,candidate_snapshot|person_project,Dates and URL nullable and ordinary same-name projects remain distinct
+8,G08,candidate_profile,person_certification,initial,confirmed,old_modified,Person certification instance,limited,no,person|certification|candidate_snapshot,Retained explicitly but allowed zero rows until a stable source exists
+8,G08,candidate_profile,candidate_certification,initial,confirmed,old_modified,Candidate certification status/date snapshot,append_only,no,candidate_snapshot|person_certification,Prevents later expiry updates from changing old Candidate view
+12,G12,machine_learning_deferred,ml_model_version,deferred,deferred,new,Future multi-model artifact identity and lifecycle,append_only,no,,Add only for multiple models shadow evaluation or formal deployment governance
+12,G12,machine_learning_deferred,ml_feature_pipeline_version,deferred,deferred,new,Future independently versioned feature and preprocessing pipeline,append_only,no,ml_model_version,Add together with multi-model or formal pipeline version governance
+9,G09,machine_learning,ml_threshold_policy,initial,confirmed,new,Versioned fixed cosine-threshold policy by reference global company or position scope,versioned,no,company|position,Updated_at retained but active threshold values are replaced by new policy versions
+9,G09,machine_learning,ml_analysis_run,initial,confirmed,new,One idempotent single-model ML execution for one Application Candidate input,yes,no,application|candidate_snapshot|etl_workflow_run,Freezes all-MiniLM identity code hash input hashes feature snapshot and fence
+9,G09,machine_learning,ml_anomaly_result,initial,confirmed,new,Immutable anomaly flags and exclusion disposition,append_only,no,ml_analysis_run|application,Any anomaly directly produces no_offer under current rule
+12,G12,machine_learning_deferred,ml_profile_cluster_result,deferred,deferred,new,Future offline KMeans cohort analysis result,append_only,no,ml_analysis_run|application|position,Do not add to real-time decision path unless a validated cohort analytics need exists
+12,G12,machine_learning_deferred,ml_scorecard_result,deferred,deferred,new,Future validated rule-scorecard output,append_only,no,ml_analysis_run|application,Do not create until weights and decision authority are validated
+9,G09,machine_learning,ml_similarity_result,initial,confirmed,new,Immutable Resume-to-JD cosine score,append_only,no,ml_analysis_run|application|position,Input hashes and fixed model identity live in parent analysis; no vector or long-text copy
+9,G09,machine_learning,ml_recommendation_result,initial,confirmed,new,One immutable automatic offer/no_offer recommendation per Application,append_only,producer,ml_analysis_run|ml_anomaly_result|ml_similarity_result|ml_threshold_policy|application,Published atomically with Application decision and conditional Offer draft
+10,G10,hiring_pipeline,hiring_pipeline,initial,confirmed,old_modified,Versioned hiring-process template,versioned,no,,Active versions freeze stage and edge definitions
+10,G10,hiring_pipeline,pipeline_stage,initial,confirmed,old_modified,Stage node and default display order within one pipeline version,limited,no,hiring_pipeline,Includes 13 optional flexible stages; default order is not actual Application order
+10,G10,hiring_pipeline,pipeline_stage_transition,initial,confirmed,old_modified,Allowed directed template edge,limited,no,hiring_pipeline|pipeline_stage,Supports forward skip return and direct terminal movements
+10,G10,hiring_pipeline,application_stage_run,initial,confirmed,old_modified,Actual Application business-stage attempt and sequence,limited,no,application|pipeline_stage|etl_workflow_run|ml_recommendation_result,Business attempt is separate from G04 technical retry
+10,G10,hiring_pipeline,application_stage_transition_event,initial,confirmed,old_replacement,Immutable actual path movement between stage attempts,append_only,producer,application|application_stage_run|pipeline_stage_transition|etl_workflow_run,Replaces Application_stage_history and preserves skips returns repeats and terminal moves
+11,G11,offer,offer,initial,confirmed,old_modified,One Application unique Offer master current lifecycle state and decision snapshots,yes,producer,application|candidate_snapshot|application_stage_run|ml_recommendation_result|offer_version,Composite RESTRICT foreign keys prevent cross-Application Candidate Stage or ML links
+11,G11,offer,offer_version,initial,confirmed,old_modified,Immutable negotiated Offer terms version,append_only,producer,offer|position_employment_type,Compensation tuple is all present or all null; Draft master may temporarily have no version
+11,G11,offer,offer_status_history,initial,confirmed,old_modified,Immutable Offer lifecycle transition,append_only,producer,offer|offer_version|etl_workflow_run|application_stage_run,Current status is cache; history preserves from-to actor reason version workflow stage and idempotency
+12,G12,deferred,recruiting_policy,deferred,deferred,new,Versioned recruiting policy and overrides,versioned,no,company|position,Create when policy complexity exceeds simple fields
+12,G12,deferred,system_configuration,deferred,deferred,new,Versioned mutable runtime configuration,versioned,no,,Create when Worker vars are insufficient
+12,G12,deferred,submission_form_session,deferred,deferred,new,Future controlled form-opening session,yes,no,catalog_revision,Not reliable with current native forms
+12,G12,deferred,form_draft,deferred,deferred,new,Future first-party form draft,yes,no,submission_form_session,Requires custom website
+12,G12,deferred,offer_document,deferred,deferred,new,Generated Offer document metadata,yes,producer,offer_version|outbox_event,Create with document generation
+12,G12,deferred,offer_approval,deferred,deferred,new,Independent Offer budget/terms approval,yes,producer,offer|application_stage_run,Create if stage decision is insufficient
+12,G12,deferred,position_work_mode,deferred,deferred,new,Future position-specific work-mode compatibility,limited,producer,position|company_work_mode,Deferred until real position-level work-mode data or filtering is required
+99,G99,removed_legacy,experience_level,removed,removed,old_removed,Unused experience-level taxonomy,no,no,,Explicitly removed
+99,G99,removed_legacy,region,removed,removed,old_removed,Unused location subdivision,no,no,,Explicitly removed
+99,G99,removed_legacy,timezone,removed,removed,old_removed,Unused timezone reference,no,no,,Explicitly removed
+99,G99,removed_legacy,school_location,removed,removed,old_removed,Unused school-location bridge,no,no,,Explicitly removed
+99,G99,removed_legacy,company_industry_code,removed,removed,old_removed,Unused company industry reference,no,no,,Explicitly removed
+99,G99,removed_legacy,company_name_aliases,removed,removed,old_removed,Unused alias table,no,no,,Explicitly removed
+99,G99,removed_legacy,company_location,removed,removed,old_removed,Unused company-location bridge,no,no,,Explicitly removed
+99,G99,removed_legacy,position_application_cycle,removed,removed,old_removed,Unavailable real application-cycle data,no,no,,Replaced by requested start year-month proxy
+99,G99,removed_legacy,specific_open_window,removed,removed,old_removed,Unused opening-window table,no,no,,Explicitly removed
+99,G99,removed_legacy,ingestion_batch,removed,removed,old_removed,File-oriented batch envelope,no,no,,Replaced by per-record intake/workflow runs
+99,G99,removed_legacy,dataset_type,removed,removed,old_removed,Unused batch dataset taxonomy,no,no,,Explicitly removed
+99,G99,removed_legacy,submission_processing_run,removed,removed,old_replaced,Old generic process log,no,no,,Replaced by workflow/step/attempt tables
+99,G99,removed_legacy,submission_attachment,removed,removed,old_removed,Old submission attachment metadata,no,no,,PDF will use raw metadata and future R2 reference
+99,G99,removed_legacy,resume_external_identifier,removed,removed,old_merged,Separate resume URL identifier table,no,no,,Merged into submission_identity_feature
+99,G99,removed_legacy,identity_identifier,removed,removed,old_removed,Global identity identifier dimension,no,no,,Person contact/link and submission identity are sufficient
+99,G99,removed_legacy,person_identifier_claim,removed,removed,old_removed,Person-to-identifier claims,no,no,,Replaced by person_contact/person_link histories
+99,G99,removed_legacy,application_submission,removed,removed,old_replaced,Old application-submission bridge,no,no,,Replaced by application_source_lineage
+99,G99,removed_legacy,application_document,removed,removed,old_removed,Application document tied to Submission attachment,no,no,,Raw resume in candidate snapshot/source; Offer document deferred
+99,G99,removed_legacy,application_cluster,removed,removed,old_removed,Materialized application grouping table,no,no,,Replaced by stable grouping fields
+99,G99,removed_legacy,person_relocation_preference,removed,removed,old_removed,Unused preference child table,no,no,,Explicitly removed
+99,G99,removed_legacy,candidate_reference,removed,removed,old_removed,Unused candidate reference table,no,no,,Explicitly removed
+99,G99,removed_legacy,application_stage_history,removed,removed,old_replaced,Overlapping stage history,no,no,,Replaced by stage run and transition event

@@ -1,0 +1,9 @@
+name = "hirebeat-recruiting-d1-v1-schema"
+compatibility_date = "2026-08-17"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2"
+database_id = "6c4275ca-faf3-4cba-867c-8ce807c30fc6"
+migrations_dir = "migrations"
+migrations_table = "d1_migrations"
