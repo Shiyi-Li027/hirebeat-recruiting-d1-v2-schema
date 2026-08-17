@@ -15,7 +15,7 @@ Current verified baseline:
 | Item | Result |
 |---|---:|
 | Confirmed initial tables | 82 |
-| Explicit indexes | 116 |
+| Explicit indexes | 117 |
 | Confirmed schema groups | 11 |
 | Deferred objects | 11 |
 | Removed/replaced legacy objects | 22 |
@@ -93,7 +93,8 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 .
 ├── .github/workflows/deploy-d1.yml
 ├── migrations/
-│   └── 0001_initial_schema.sql
+│   ├── 0001_initial_schema.sql
+│   └── 0002_add_resume_file_integrity.sql
 ├── schema/
 │   ├── HIREBEAT_D1_CREATE_2026-08-17.sql
 │   └── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
@@ -108,7 +109,7 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 └── README.md
 ```
 
-The canonical deployment entry point is `migrations/0001_initial_schema.sql`. The standalone CREATE file is byte-identical to that migration. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
+The canonical deployment entry point is the ordered set of files in `migrations/`. `0001_initial_schema.sql` is the immutable deployed baseline; every later change is added as a new migration. The standalone CREATE file represents the latest complete schema for a fresh database and is therefore no longer byte-identical to `0001`. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
 
 ## Prerequisites / 环境要求
 
@@ -141,7 +142,7 @@ npm run schema:validate
 Expected result:
 
 ```text
-Schema validation succeeded: 82 tables, 116 explicit indexes, 0 FK violations.
+Schema validation succeeded: 2 migrations, 82 tables, 117 explicit indexes, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库

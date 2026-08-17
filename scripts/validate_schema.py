@@ -4,22 +4,42 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sqlite3
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "migrations/0001_initial_schema.sql"
+MIGRATIONS_DIR = ROOT / "migrations"
+BASELINE_MIGRATION = MIGRATIONS_DIR / "0001_initial_schema.sql"
+BASELINE_MIGRATION_SHA256 = (
+    "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
+)
 CONFIG = ROOT / "wrangler.toml"
 EXPECTED_TABLE_COUNT = 82
-EXPECTED_INDEX_COUNT = 116
+EXPECTED_INDEX_COUNT = 117
 
 
 def validate(check_config: bool) -> None:
-    sql = MIGRATION.read_text(encoding="utf-8")
+    migration_paths = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    if not migration_paths:
+        raise SystemExit("Schema validation failed: no migration files found.")
+    if migration_paths[0] != BASELINE_MIGRATION:
+        raise SystemExit(
+            "Schema validation failed: 0001_initial_schema.sql must be the "
+            "first migration."
+        )
+    baseline_hash = hashlib.sha256(BASELINE_MIGRATION.read_bytes()).hexdigest()
+    if baseline_hash != BASELINE_MIGRATION_SHA256:
+        raise SystemExit(
+            "Schema validation failed: deployed baseline migration 0001 was "
+            "modified. Restore it and create a later migration instead."
+        )
+
     connection = sqlite3.connect(":memory:")
     try:
-        connection.executescript(sql)
+        for migration_path in migration_paths:
+            connection.executescript(migration_path.read_text(encoding="utf-8"))
         table_count = connection.execute(
             """
             SELECT COUNT(*) FROM sqlite_master
@@ -59,7 +79,8 @@ def validate(check_config: bool) -> None:
 
     print(
         "Schema validation succeeded: "
-        f"{table_count} tables, {index_count} explicit indexes, 0 FK violations."
+        f"{len(migration_paths)} migrations, {table_count} tables, "
+        f"{index_count} explicit indexes, 0 FK violations."
     )
 
 

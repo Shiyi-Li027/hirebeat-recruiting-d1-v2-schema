@@ -150,6 +150,8 @@ CREATE TABLE raw_submission_resume (
   resume_mime_type TEXT,
   resume_file_size_bytes INTEGER
     CHECK (resume_file_size_bytes IS NULL OR resume_file_size_bytes >= 0),
+  resume_file_sha256 TEXT
+    CHECK (resume_file_sha256 IS NULL OR length(resume_file_sha256) = 64),
   resume_r2_object_key TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -198,3 +200,7 @@ CREATE INDEX idx_raw_submission_submitted_catalog
 
 CREATE INDEX idx_raw_submission_retention
   ON raw_submission (retention_until, purged_at);
+
+CREATE UNIQUE INDEX uq_raw_submission_resume_r2_object_key
+  ON raw_submission_resume (resume_r2_object_key)
+  WHERE resume_r2_object_key IS NOT NULL;

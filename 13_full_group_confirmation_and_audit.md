@@ -71,7 +71,7 @@ Company 没有 active Work Mode 时允许退化为 Company → Position。`posit
 schema files executed:                11
 actual initial tables:                82
 inventory initial tables:             82
-explicit indexes:                     116
+explicit indexes:                     117
 inventory tables missing from schema: 0
 schema tables missing from inventory: 0
 foreign-key parent-key errors:         0
@@ -108,4 +108,3 @@ Inventory 中已经没有 `draft` 或 `proposed` 表。
 ## 7. 安全阻断项
 
 组员附件中出现过明文 Airtable token 和 Google service-account credential。任何部署前必须撤销/轮换，并迁移到 Cloudflare Secrets。旧凭据不能进入最终 Git repository、Schema、seed、CSV、错误日志或文档示例。
-

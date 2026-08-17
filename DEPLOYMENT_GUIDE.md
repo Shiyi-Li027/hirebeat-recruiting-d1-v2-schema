@@ -4,8 +4,9 @@
 
 | 文件 | 用途 |
 |---|---|
-| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 完整建库 SQL；包含 82 张业务表和 116 个显式索引，不包含 seed data |
-| `migrations/0001_initial_schema.sql` | GitHub Actions 实际部署的第一个 D1 migration；内容与 CREATE.sql 完全相同 |
+| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 当前最新完整建库 SQL；包含 82 张业务表和 117 个显式索引，不包含 seed data |
+| `migrations/0001_initial_schema.sql` | 已部署且不可修改的初始 D1 migration；其 SHA-256 由构建和校验脚本保护 |
+| `migrations/0002_add_resume_file_integrity.sql` | 为 R2 原始简历 PDF 增加 SHA-256 完整性字段与 object key 唯一索引 |
 | `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 82 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
 | `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成上述三个 SQL 文件 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |
@@ -46,7 +47,7 @@ npm run schema:validate
 
 ```text
 82 tables
-116 explicit indexes
+117 explicit indexes
 0 FK violations
 ```
 
@@ -188,7 +189,7 @@ Settings
 执行顺序：
 
 1. checkout repository；
-2. 用 SQLite 内存数据库验证 82 张表、116 个索引和外键；
+2. 按文件名顺序执行全部 migrations，并用 SQLite 内存数据库验证 82 张表、117 个索引和外键；
 3. 检查 `wrangler.toml` 已无占位符；
 4. 使用官方 `cloudflare/wrangler-action@v4`；
 5. 执行 `wrangler d1 migrations apply DB --remote`。
@@ -238,7 +239,7 @@ git commit -m "Add example schema migration"
 git push origin main
 ```
 
-注意：当前验证脚本针对完整 0001 初始 schema。增加 0002 以后，应同步扩展验证脚本，让它按文件名顺序执行全部 migrations。
+验证脚本会按文件名顺序执行全部 migrations，并校验已部署的 `0001` 基线 SHA-256；如果有人误改 `0001`，本地校验和 GitHub Actions 都会失败。
 
 ## 13. 手工清空数据库
 

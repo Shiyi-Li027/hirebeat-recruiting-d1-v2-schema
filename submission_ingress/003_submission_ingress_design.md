@@ -287,6 +287,7 @@ resume_source_url
 resume_source_file_id
 resume_mime_type
 resume_file_size_bytes
+resume_file_sha256
 resume_r2_object_key
 ```
 

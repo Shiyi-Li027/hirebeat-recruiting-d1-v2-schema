@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 from pathlib import Path
@@ -26,10 +27,13 @@ MODULES = [
 
 CREATE_OUTPUT = ROOT / "schema/HIREBEAT_D1_CREATE_2026-08-17.sql"
 DELETE_OUTPUT = ROOT / "schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql"
-MIGRATION_OUTPUT = ROOT / "migrations/0001_initial_schema.sql"
+BASELINE_MIGRATION = ROOT / "migrations/0001_initial_schema.sql"
+BASELINE_MIGRATION_SHA256 = (
+    "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
+)
 
 EXPECTED_TABLE_COUNT = 82
-EXPECTED_INDEX_COUNT = 116
+EXPECTED_INDEX_COUNT = 117
 
 
 def strip_module_pragma(sql: str) -> str:
@@ -43,10 +47,10 @@ def strip_module_pragma(sql: str) -> str:
 
 def build_create_sql() -> str:
     sections = [
-        "-- HireBeat D1 complete initial schema",
+        "-- HireBeat D1 complete current schema",
         "-- Generated: 2026-08-17",
         "-- Source: 11 confirmed G01-G11 schema modules",
-        "-- Contains schema only: 82 application tables and 116 explicit indexes.",
+        "-- Contains schema only: 82 application tables and 117 explicit indexes.",
         "-- Seed/reference rows must be deployed in later migrations.",
         "-- Do not add BEGIN/COMMIT; D1 executes migrations transactionally.",
         "",
@@ -131,6 +135,17 @@ def build_delete_sql(table_names: list[str]) -> str:
 
 
 def main() -> None:
+    if not BASELINE_MIGRATION.is_file():
+        raise FileNotFoundError(
+            f"Missing immutable baseline migration: {BASELINE_MIGRATION}"
+        )
+    baseline_hash = hashlib.sha256(BASELINE_MIGRATION.read_bytes()).hexdigest()
+    if baseline_hash != BASELINE_MIGRATION_SHA256:
+        raise RuntimeError(
+            "migrations/0001_initial_schema.sql is an immutable deployed "
+            "baseline and must not be modified. Create a new migration instead."
+        )
+
     create_sql = build_create_sql()
     table_names, index_count = inspect_schema(create_sql)
 
@@ -144,14 +159,15 @@ def main() -> None:
         )
 
     CREATE_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    MIGRATION_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     create_bytes = create_sql.encode("utf-8")
     CREATE_OUTPUT.write_bytes(create_bytes)
-    MIGRATION_OUTPUT.write_bytes(create_bytes)
     DELETE_OUTPUT.write_text(build_delete_sql(table_names), encoding="utf-8")
 
     print(f"Generated: {CREATE_OUTPUT.relative_to(ROOT)}")
-    print(f"Generated: {MIGRATION_OUTPUT.relative_to(ROOT)}")
+    print(
+        "Preserved immutable baseline: "
+        f"{BASELINE_MIGRATION.relative_to(ROOT)} ({baseline_hash})"
+    )
     print(f"Generated: {DELETE_OUTPUT.relative_to(ROOT)}")
     print(f"Validated tables: {len(table_names)}")
     print(f"Validated explicit indexes: {index_count}")
