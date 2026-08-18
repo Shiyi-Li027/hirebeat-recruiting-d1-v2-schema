@@ -17,6 +17,7 @@ CREATE TABLE raw_submission_intake_run (
   accepted_payload_hmac TEXT,
   last_received_payload_hmac TEXT,
   payload_hmac_key_version TEXT,
+  accepted_resume_file_sha256 TEXT,
   intake_status TEXT NOT NULL DEFAULT 'received'
     CHECK (
       intake_status IN (
@@ -68,6 +69,10 @@ CREATE TABLE raw_submission_intake_run (
   CHECK (
     last_received_payload_hmac IS NULL
     OR length(last_received_payload_hmac) = 64
+  ),
+  CHECK (
+    accepted_resume_file_sha256 IS NULL
+    OR length(accepted_resume_file_sha256) = 64
   )
 );
 

@@ -9,11 +9,15 @@ service-account*.json
 **/service-account.json
 **/service-account*.json
 .DS_Store
+.Rhistory
+__pycache__/
+*.py[cod]
 *.sqlite
 *.sqlite3
 
-# Local generated files
-__pycache__/
-*.py[cod]
-.Rhistory
-.RData
+# Generated inspection exports can contain candidate PII. Keep them in the
+# repository workspace, but never commit real rows to Git history. The tracked
+# README and manifest contract remain visible through the negation rules.
+test-exports/**
+!test-exports/README.md
+!test-exports/00_export_manifest_schema.csv

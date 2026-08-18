@@ -1,0 +1,15 @@
+{
+  "name": "@hirebeat/etl-orchestrator-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "wrangler types worker-configuration.d.ts --config wrangler.toml",
+    "typecheck": "npm run types && tsc --noEmit",
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "4.123.0"
+  }
+}

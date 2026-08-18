@@ -17,8 +17,9 @@ BASELINE_MIGRATION_SHA256 = (
 )
 CONFIG = ROOT / "wrangler.toml"
 EXPECTED_TABLE_COUNT = 84
-EXPECTED_INDEX_COUNT = 118
+EXPECTED_INDEX_COUNT = 120
 EXPECTED_SYSTEM_CONFIGURATION = {
+    ("ml_inference", "request_timeout_ms"): "30000",
     ("outbox", "max_delivery_attempts"): "8",
     ("submission_ingress", "active_stale_seconds"): "300",
     ("submission_ingress", "max_attempts"): "5",

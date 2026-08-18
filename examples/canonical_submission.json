@@ -1,0 +1,35 @@
+{
+  "submission_uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "source_system": "airtable",
+  "source_record_id": "rec-example-001",
+  "source_event_key": "airtable:base-example:table-example:rec-example-001",
+  "source_schema_version": "airtable_application_v1",
+  "catalog": {
+    "catalog_revision_id": 27,
+    "company_id": 12,
+    "company_name": "HireBeat",
+    "company_work_mode_id": 3,
+    "company_work_mode_name": "Remote",
+    "position_id": 18,
+    "position_name": "Data Analyst Intern"
+  },
+  "applicant": {
+    "person_name": "Example Candidate",
+    "email_address": "candidate@example.com",
+    "phone": null
+  },
+  "application": {
+    "start_working_date": "2026-09-01",
+    "end_working_date": null,
+    "work_duration": "12 weeks",
+    "source_submitted_at": "2026-08-17T22:00:00Z"
+  },
+  "resume": {
+    "resume_text": "EDUCATION\nExample University",
+    "source_url": null,
+    "source_file_id": null,
+    "original_file_name": null,
+    "mime_type": null,
+    "parser_version": null
+  }
+}

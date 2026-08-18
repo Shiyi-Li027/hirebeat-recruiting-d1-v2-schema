@@ -1,0 +1,13 @@
+{
+  "name": "@hirebeat/operations-api-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "4.123.0"
+  }
+}

@@ -1,7 +1,7 @@
 -- HireBeat D1 complete current schema
 -- Generated: 2026-08-17
 -- Source: 11 confirmed G01-G11 schema modules
--- Contains schema only: 84 application tables and 118 explicit indexes.
+-- Contains schema only: 84 application tables and 120 explicit indexes.
 -- Seed/reference rows must be deployed in later migrations.
 -- Do not add BEGIN/COMMIT; D1 executes migrations transactionally.
 
@@ -583,6 +583,7 @@ CREATE TABLE raw_submission_intake_run (
   accepted_payload_hmac TEXT,
   last_received_payload_hmac TEXT,
   payload_hmac_key_version TEXT,
+  accepted_resume_file_sha256 TEXT,
   intake_status TEXT NOT NULL DEFAULT 'received'
     CHECK (
       intake_status IN (
@@ -634,6 +635,10 @@ CREATE TABLE raw_submission_intake_run (
   CHECK (
     last_received_payload_hmac IS NULL
     OR length(last_received_payload_hmac) = 64
+  ),
+  CHECK (
+    accepted_resume_file_sha256 IS NULL
+    OR length(accepted_resume_file_sha256) = 64
   )
 );
 
@@ -1097,6 +1102,13 @@ CREATE INDEX idx_audit_workflow_time
 
 CREATE INDEX idx_audit_correlation
   ON audit_event (correlation_key, occurred_at);
+
+-- Authenticated operational commands use correlation_key as their caller-
+-- supplied idempotency key. This partial index does not constrain ordinary
+-- audit rows and prevents a command replay from applying the mutation twice.
+CREATE UNIQUE INDEX uq_audit_event_command_idempotency
+  ON audit_event (event_type, correlation_key)
+  WHERE event_type LIKE 'command.%' AND correlation_key IS NOT NULL;
 -- END SOURCE MODULE: workflow_control/004_workflow_control_draft.sql
 
 -- ============================================================
@@ -2315,6 +2327,10 @@ CREATE INDEX idx_lineage_source_dedup
 
 CREATE INDEX idx_lineage_source_extraction
   ON application_source_lineage (source_resume_extraction_id);
+
+CREATE UNIQUE INDEX idx_application_source_lineage_one_primary_promotion
+  ON application_source_lineage (source_submission_normalized_id)
+  WHERE relation_role = 'primary_decision_input';
 
 CREATE INDEX idx_person_name_lookup
   ON person_name (normalized_name, person_id);

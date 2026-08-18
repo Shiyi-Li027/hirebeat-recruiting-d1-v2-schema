@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "canonical-intake-v1",
+  "source": {
+    "sourceSystem": "airtable",
+    "sourceRecordId": "rec_test_airtable_001",
+    "sourceEventKey": "airtable:test:event:001",
+    "submissionUuid": "8f608f13-e78e-44e2-8c0d-9b68d9500fea",
+    "sourceSubmittedAt": "2026-08-18T12:00:00.000Z"
+  },
+  "technicalDelivery": {
+    "mechanism": "initial_delivery",
+    "causeCode": null,
+    "deliveredAt": "2026-08-18T12:00:01.000Z"
+  },
+  "catalog": {
+    "companyId": 1,
+    "companyName": "Example Company",
+    "companyWorkModeId": 1,
+    "companyWorkModeName": "Remote",
+    "positionId": 1,
+    "positionName": "Data Analyst Intern"
+  },
+  "applicant": {
+    "personName": "Example Candidate",
+    "personEmailAddress": "candidate@example.invalid",
+    "personPhone": "",
+    "startWorkingDate": "2026-09-01",
+    "endWorkingDate": null,
+    "workDuration": "12 weeks"
+  },
+  "resume": {
+    "kind": "pdf_reference",
+    "source": "airtable_attachment",
+    "sourceUrl": "https://example.invalid/synthetic-resume.pdf",
+    "sourceFileId": null,
+    "originalFileName": "synthetic-resume.pdf",
+    "declaredMimeType": "application/pdf"
+  },
+  "sourceFieldSnapshot": {
+    "fixture": true,
+    "containsNoRealApplicantData": true
+  }
+}

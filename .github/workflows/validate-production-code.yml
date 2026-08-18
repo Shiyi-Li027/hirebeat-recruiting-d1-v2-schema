@@ -1,0 +1,46 @@
+name: Validate production ETL code
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "workers/**"
+      - "services/**"
+      - "scripts/**"
+      - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/validate-production-code.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Validate schema and migrations
+        run: python3 scripts/validate_schema.py --check-config
+      - name: Compile Python services
+        run: python3 -m compileall -q services scripts
+      - name: Test authenticated PDF Parser contract
+        run: |
+          python3 -m pip install -r services/resume-parser/requirements-dev.txt
+          PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/test
+      - name: Test deterministic Ingress acquisition and Parser client behavior
+        run: npm run ingress:test
+      - name: Test Outbox-to-Workflow instance idempotency
+        run: npm run orchestrator:test
+      - name: Bundle production Workers
+        run: npm run workers:build

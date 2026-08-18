@@ -6,23 +6,23 @@ Versioned Cloudflare D1 schema, migration, validation, and GitHub Actions deploy
 
 ## Project status / 项目状态
 
-This repository contains the **confirmed initial schema foundation** for the new HireBeat recruiting database. The schema has been generated and validated locally, but the production ETL and Workflow A/B implementation is intentionally developed in later stages.
+This repository contains the confirmed schema and the first complete production implementation boundary for HireBeat's real-time recruiting pipeline: authenticated Airtable/Google intake, private R2 PDF preservation, PDF parsing, atomic Raw publication, Outbox dispatch, Workflow A, Workflow B, ML inference, hiring decision, Offer draft/version/lifecycle commands, and protected Catalog operations.
 
-本仓库包含 HireBeat 新版招聘数据库已经确认的首版 Schema 基础。数据库结构已经完成本地生成和验证，但生产级 Ingress、Workflow A/B、Catalog Sync 与 Offer command 的具体实现将在后续阶段继续开发。
+本仓库包含 HireBeat 新版招聘数据库已经确认的 Schema，以及第一版完整生产实现边界：Airtable/Google 认证接入、私有 R2 PDF 留存、PDF 解析、Raw 原子发布、Outbox、Workflow A、Workflow B、ML 推理、招聘决定、Offer draft/version/lifecycle command 与受保护的 Catalog Operations API。
 
 Current verified baseline:
 
 | Item | Result |
 |---|---:|
 | Confirmed current tables | 84 |
-| Explicit indexes | 118 |
+| Explicit indexes | 120 |
 | Confirmed schema groups | 11 |
 | Deferred objects | 10 |
 | Removed/replaced legacy objects | 22 |
 | Local foreign-key violations | 0 |
 | Local migration | Passed |
 
-The immutable initial migration creates schema objects only. Migration `0003` adds the versioned non-secret system-configuration tables and their initial bootstrap release. Reference seeds and the 13 hiring pipeline stage seeds are still managed separately through later versioned migrations.
+The immutable initial migration creates the original schema objects only. Migrations `0002` through `0009` add R2 file-integrity support, versioned non-secret runtime configuration, reference and hiring-stage seeds, the global ML threshold policy, minimum runtime reference rows, command idempotency, and single-promotion protection from normalized Submission to Application. Deployed migrations are immutable; every later schema or seed change must use a new numbered migration.
 
 ## Architecture / 架构
 
@@ -70,7 +70,7 @@ A private Cloudflare R2 bucket has been provisioned for original resume PDF file
 | D1 object-key column | `resume_r2_object_key` |
 | D1 file-hash column | `resume_file_sha256` |
 | Current infrastructure status | Bucket created and Wrangler binding configured |
-| Current application status | PDF upload and parsing Worker not yet implemented |
+| Current application status | Writing Ingress, Parser, R2, Raw D1 publication, Outbox, Workflow A/B, ML and Operations code implemented and bundle-validated; remote runtime values and Secrets must be configured before deployment |
 
 Responsibility boundary:
 
@@ -80,7 +80,8 @@ Responsibility boundary:
 - `raw_submission_resume.resume_text` stores extracted UTF-8 text when parsing succeeds.
 - R2 object bytes are not duplicated into D1.
 - The bucket remains private; resumes must not be exposed through a public bucket URL.
-- The upcoming production Ingress adapter will idempotently upload the PDF to R2 first, then use a short D1 transaction to publish the Raw metadata, intake status, and Workflow A Outbox event.
+- The R2 service uses `raw-resumes/v1/{submission_uuid}/{resume_file_sha256}.pdf`, conditional create semantics, and metadata verification on technical redelivery.
+- `workers/submission-ingress/` connects the canonical intake contract, Airtable/Google adapters, bounded PDF acquisition, Google service-account Drive authentication, SHA-256, conditional R2 storage, authenticated Parser call, D1 intake fencing, atomic Raw/Resume/Outbox publication, and retry/terminal-failure accounting.
 
 ## Confirmed schema groups / 已确认分组
 
@@ -122,7 +123,22 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 ├── migrations/
 │   ├── 0001_initial_schema.sql
 │   ├── 0002_add_resume_file_integrity.sql
-│   └── 0003_add_versioned_system_configuration.sql
+│   ├── 0003_add_versioned_system_configuration.sql
+│   ├── 0004_seed_pipeline_and_ml_reference_bands.sql
+│   ├── 0005_freeze_intake_resume_file_hash.sql
+│   ├── 0006_seed_global_ml_threshold_policy.sql
+│   ├── 0007_seed_minimum_runtime_reference_data.sql
+│   ├── 0008_enforce_command_idempotency.sql
+│   └── 0009_enforce_single_application_promotion.sql
+├── workers/
+│   ├── submission-ingress/
+│   ├── etl-orchestrator/
+│   └── operations-api/
+├── services/
+│   ├── resume-parser/
+│   └── ml-inference/
+├── test-exports/
+│   └── read-only inspection export contract
 ├── schema/
 │   ├── HIREBEAT_D1_CREATE_2026-08-17.sql
 │   └── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
@@ -131,13 +147,16 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 │   └── validate_schema.py
 ├── shared_reference/ through offer/
 │   └── confirmed group design and source SQL
+├── 15_production_implementation_runbook.md
+├── 16_runtime_three_way_comparison.md
+├── 17_staging_end_to_end_acceptance_plan.md
 ├── wrangler.toml
 ├── package.json
 ├── DEPLOYMENT_GUIDE.md
 └── README.md
 ```
 
-The canonical deployment entry point is the ordered set of files in `migrations/`. `0001_initial_schema.sql` is the immutable deployed baseline; every later change is added as a new migration. The standalone CREATE file represents the latest complete schema for a fresh database and is therefore no longer byte-identical to `0001`. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
+The canonical database deployment entry point is the ordered set of files in `migrations/`. The canonical runtime entry points are the three packages below `workers/`; the former root JavaScript Ingress prototype and its standalone Wrangler config were removed to prevent accidental deployment. The standalone CREATE file represents the latest complete schema for a fresh database and is therefore no longer byte-identical to `0001`. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
 
 ## Prerequisites / 环境要求
 
@@ -168,10 +187,17 @@ Validate the initial migration in an in-memory SQLite database:
 npm run schema:validate
 ```
 
+Validate the authenticated PDF Parser contract in an isolated Python environment:
+
+```bash
+python3 -m pip install -r services/resume-parser/requirements-dev.txt
+PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/test
+```
+
 Expected result:
 
 ```text
-Schema validation succeeded: 3 migrations, 84 tables, 118 explicit indexes, 0 FK violations.
+Schema validation succeeded: 9 migrations, 84 tables, 120 explicit indexes, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库
@@ -257,7 +283,14 @@ npx wrangler d1 execute DB --remote --command \
   "PRAGMA foreign_key_check;"
 ```
 
-Remote production deployment should occur through GitHub Actions. Direct remote commands should be reserved for controlled verification or explicitly approved administrative operations.
+The currently configured remote D1/R2 resources are the staging environment. Staging deployment should
+occur through GitHub Actions. After end-to-end validation, production must use separate D1/R2/Worker/
+Workflow resources and a protected GitHub `production` Environment with approval. Direct remote commands
+should be reserved for controlled verification or explicitly approved administrative operations.
+
+Production-grade describes the code, contracts, tests, observability, and recovery behavior; it does not
+mean testing directly against live candidate data. Local, staging, and production run the same release
+artifacts with isolated bindings and Secrets.
 
 ## Migration policy / 迁移规范
 
@@ -296,18 +329,18 @@ This repository must contain schema, migration, and documentation artifacts only
 
 If this repository is made public, confirm that HireBeat has authorized publication of its internal database architecture and workflow rules. Otherwise, keep the repository private.
 
-## Known deferred work / 后续工作
+On-demand inspection CSVs use the fixed workspace directory [`test-exports/`](test-exports/README.md).
+Generated rows are ignored by Git because they can contain candidate PII. Team sharing uses a private,
+time-limited GitHub Actions Artifact; only the directory contract, manifest schema, and synthetic or
+explicitly redacted samples may be committed.
 
-- Reference and hiring-stage seed migrations
-- Production Ingress adapters for Airtable and Google Forms
-- Workflow A and Workflow B implementation
-- Table-level idempotency, retry, terminal-failure, and compensation tests
-- Catalog synchronization execution logic
-- ML model/version expansion beyond the initial production model
-- Candidate/JD chunked embedding to avoid long-text truncation
-- Optional Position-level work mode
-- Offer approval and more advanced Offer versioning integrations
-- End-to-end empty database, first submission, duplicate delivery, resubmission, supersession, rejection, and Offer tests
+## Remaining deployment prerequisites and deferred work / 尚待外部配置与后续增强
+
+- Configure private Parser and ML service URLs, authentication Secrets, Cloudflare Access team domain/AUD, and source credentials before remote Worker deployment.
+- Connect each native Airtable Automation / Google Apps Script producer to its authenticated Ingress route.
+- Implement provider-specific Catalog option writers after the exact Airtable base and Google Form IDs are available; D1 Catalog revision publication is implemented.
+- Run staging end-to-end tests for empty database, first submission, technical redelivery, intentional resubmission, supersession fence, rejection, Offer creation/versioning, and terminal recovery before creating isolated production resources.
+- ML model/version expansion, chunked long-text embedding, Position-level work mode, reference-data releases, and external Offer document/e-signature integration remain deliberately deferred.
 
 See [`03_future_optimization_recommendations.md`](03_future_optimization_recommendations.md) for the maintained optimization backlog.
 
@@ -320,6 +353,10 @@ See [`03_future_optimization_recommendations.md`](03_future_optimization_recomme
 - [`02_three_way_schema_comparison.csv`](02_three_way_schema_comparison.csv): new schema vs. legacy schema vs. teammate implementation
 - [`12_deferred_and_removed_review.md`](12_deferred_and_removed_review.md): deferred and removed object decisions
 - [`13_full_group_confirmation_and_audit.md`](13_full_group_confirmation_and_audit.md): final confirmation and structural audit
+- [`14_remaining_production_decisions.md`](14_remaining_production_decisions.md): frozen D01-D15 production decisions
+- [`15_production_implementation_runbook.md`](15_production_implementation_runbook.md): implemented runtime flow, APIs, required bindings/Secrets, validation and deployment gates
+- [`16_runtime_three_way_comparison.md`](16_runtime_three_way_comparison.md): runtime-level differences from the legacy Colab flow and teammate Worker
+- [`test-exports/README.md`](test-exports/README.md): centralized inspection-export directory and PII boundary
 
 ## License
 

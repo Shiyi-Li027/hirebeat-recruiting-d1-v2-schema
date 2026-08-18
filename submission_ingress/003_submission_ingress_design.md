@@ -302,7 +302,60 @@ Raw 与 Resume child 允许在文本为 NULL 时完整落地。Workflow A Initia
 
 `resume_r2_object_key` 是已创建的私有 Cloudflare R2 Bucket 中原始 Resume PDF 的对象键。当前 Bucket 为 `hirebeat-hr-raw-resumes-pdf-r2-v1`，Worker binding 为 `hirebeat_hr_raw_resumes_pdf_r2_v1`。D1 不保存 PDF BLOB；`raw_submission_resume` 只保存 object key、文件 metadata、`resume_file_sha256` 和解析后的 UTF-8 Resume 文本。
 
-当前基础设施状态为：R2 Bucket 已创建、Wrangler binding 已配置、D1 文件完整性字段和唯一 object-key 索引已定义；PDF 上传、解析和 D1/R2 协调写入的生产 Ingress Worker 尚待实现。`resume_r2_object_key` 在首版及生产 Ingress Worker 完成后都保持 nullable，因为直接提供 Resume text、没有 Resume、终结性解析失败或历史记录等合法情况可能不存在对应的 R2 PDF 对象。对于实际包含原始 PDF 的成功 Ingress，生产代码必须写入唯一 object key 和对应的 `resume_file_sha256`。
+当前基础设施状态为：R2 Bucket 已创建、Wrangler binding 已配置、D1 文件完整性字段和唯一 object-key 索引已定义。独立的 `workers/submission-ingress/` 已将 Airtable HTTPS attachment、Google service-account Drive read-only download、双重大小限制、PDF magic/content-type 校验、SHA-256、稳定 R2 key、conditional create、Parser、D1 fencing 和 Raw 原子发布接入认证 HTTP route。合成单元测试不调用任何远程系统；远程启用前仍必须配置真实 Parser URL、Secrets 并完成 staging 端到端验证。`resume_r2_object_key` 保持 nullable，因为无 Resume 等合法情况可能不存在对应对象。
+
+已接入的幂等协调层包含：稳定 keyed HMAC、三组身份键联合检查、并发 INSERT 竞态后的重新读取、technical redelivery 计数、payload conflict 记录、最大尝试次数判断和 stale takeover eligibility。HMAC 明确不包含技术投递时间/原因、临时 Airtable URL、`source_event_key` 或 provider envelope；它只用于判断“同一个来源身份是否带着不同的业务 payload 重送”，绝不用于判定两个不同 `submission_uuid` 的申请是否为招聘业务重复。
+
+`attempt_count` 同时作为处理 fencing token。每次成功 claim 都原子加一，后续处理和发布必须携带 claim 得到的 attempt number；stale takeover 后旧 Worker 的条件更新必须返回零行。stale 时间依据 `last_attempt_started_at`，而不是会被技术重送更新的接收时间，避免技术重送错误刷新旧处理任务的存活状态。R2、Parser、Raw 短事务和失败收尾现已作为一个完整 service 接入正式内部 endpoint。
+
+新 intake 使用当时 active release；已有 intake 的重试必须按它已经冻结的 `configuration_release_id` 读取历史配置，即使该 release 后来已经成为 `superseded` 或 `retired`。coordinator 对传入错误 release 的调用返回配置错误，防止旧任务静默套用新的 timeout 或最大尝试次数。
+
+### 首版 PDF 获取与 Parser 顺序
+
+首版继续沿用组员已经验证过的两条来源逻辑，不增加 PDF 失效后自动切换到来源 Resume 长文本的 fallback：
+
+```text
+Airtable attachment URL
+→ Ingress 下载 PDF bytes
+→ 校验 MIME、PDF magic bytes 和配置中的最大文件大小
+→ 计算 PDF SHA-256
+→ 幂等写入私有 R2
+→ 将同一份 PDF bytes 发送给 Parser
+→ 原样保存 Parser 返回的 UTF-8 文本和换行
+```
+
+```text
+Google Drive file ID
+→ 使用 Google access token 下载 PDF bytes
+→ 校验 MIME、PDF magic bytes 和配置中的最大文件大小
+→ 计算 PDF SHA-256
+→ 幂等写入私有 R2
+→ 将同一份 PDF bytes 发送给 Parser
+→ 原样保存 Parser 返回的 UTF-8 文本和换行
+```
+
+Airtable 路径不再让 Ingress 和 Parser 分别下载同一个临时 URL。Ingress 只下载一次，并把同一份 bytes 依次用于 R2 PUT 和 `/parse-pdf`，从而保留组员原有 PyMuPDF 解析逻辑，同时减少重复网络请求和来源 URL 在第二次下载前失效的窗口。
+
+首版稳定 object key 已冻结为：
+
+```text
+raw-resumes/v1/{submission_uuid}/{resume_file_sha256}.pdf
+```
+
+写入采用 `If-None-Match: *` 条件创建。同一技术事件重送时，如果对象已存在，只有在 size 与 custom metadata 中的 SHA-256 均一致时才复用；不一致返回 conflict，不覆盖旧对象。下载同时检查响应声明大小和实际流式累计大小，避免来源省略或伪造 `Content-Length` 时绕过 10 MiB 配置限制。
+
+R2 成功是调用 Parser 之前的必要步骤：R2 暂时失败时不得绕过对象存储继续发布 Raw，应该把 intake 标记为 `failed_retryable` 并按已经冻结的 configuration release 重试。PDF 已经成功保存到 R2、但 Parser 在重试耗尽后仍失败时，Raw 仍可忠实发布，`raw_submission_resume` 使用：
+
+```text
+resume_text_status = parse_failed_terminal
+resume_text = NULL
+resume_r2_object_key = 已保存的 object key
+resume_file_sha256 = 已保存 PDF 的 SHA-256
+```
+
+来源本来没有 Resume 时使用 `resume_text_status = no_resume`；PDF 和 Parser 均成功时使用 `resume_text_status = available` 与 `resume_text_origin = pymupdf`。Worker 不对 Parser 返回文本执行合并换行、压缩空白、删除标题或其他业务清洗。
+
+首版明确暂不实现：失效 PDF URL 后自动使用来源 Resume 长文本、PDF/文本质量比较、多来源自动选择和 `resume_text_fallback_used` 事件。将来如果重新评估该能力，必须通过新版本设计显式增加，不能在首版 Worker 中隐式 fallback。
 
 ### 内容完整性
 

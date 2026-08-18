@@ -1,0 +1,1 @@
+"""HireBeat ML inference service."""

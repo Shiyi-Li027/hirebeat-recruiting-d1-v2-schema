@@ -1,0 +1,4 @@
+# Local development placeholders only. Never commit real values.
+ML_SERVICE_AUTH_TOKEN=replace-with-at-least-32-random-characters
+IDENTITY_HMAC_KEY_V1=replace-with-at-least-32-random-characters
+ORCHESTRATOR_INTERNAL_AUTH_TOKEN=replace-with-at-least-32-random-characters

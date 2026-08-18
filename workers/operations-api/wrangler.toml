@@ -1,0 +1,16 @@
+name = "hirebeat-operations-api-v1"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+workers_dev = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2"
+database_id = "6c4275ca-faf3-4cba-867c-8ce807c30fc6"
+migrations_dir = "../../migrations"
+migrations_table = "d1_migrations"
+
+[vars]
+DEPLOYMENT_STAGE = "staging"
+ACCESS_TEAM_DOMAIN = "REPLACE_WITH_ACCESS_TEAM_DOMAIN"
+ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD"

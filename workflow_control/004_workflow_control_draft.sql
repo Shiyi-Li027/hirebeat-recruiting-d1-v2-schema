@@ -320,3 +320,10 @@ CREATE INDEX idx_audit_workflow_time
 
 CREATE INDEX idx_audit_correlation
   ON audit_event (correlation_key, occurred_at);
+
+-- Authenticated operational commands use correlation_key as their caller-
+-- supplied idempotency key. This partial index does not constrain ordinary
+-- audit rows and prevents a command replay from applying the mutation twice.
+CREATE UNIQUE INDEX uq_audit_event_command_idempotency
+  ON audit_event (event_type, correlation_key)
+  WHERE event_type LIKE 'command.%' AND correlation_key IS NOT NULL;

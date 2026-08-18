@@ -105,6 +105,12 @@ selection_ratio_snapshot
 - Outbox 投递延迟；
 - `failed_terminal` 比例。
 
+来源 PDF 下载与 Parser 是两个不同的网络阶段。首版代码已把 source
+download timeout 作为显式依赖传入，但尚未偷用 `parser_timeout_ms`。接通
+生产 orchestration 前应发布独立的 `submission_ingress.pdf_download_timeout_ms`
+配置；生产指标成熟后，分别按来源下载延迟与 Parser 延迟校准，不能用一个
+timeout 同时掩盖两种故障。
+
 建议累计至少数百至一千份真实 Resume，或连续运行两至四周后进行第一次校准。Parser timeout 可采用以下经验基线：
 
 ```text

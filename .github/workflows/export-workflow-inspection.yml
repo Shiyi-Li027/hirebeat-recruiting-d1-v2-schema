@@ -1,0 +1,46 @@
+name: Export private workflow inspection bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_run_uuid:
+        description: Exact etl_workflow_run.workflow_run_uuid
+        required: true
+        type: string
+      deployment_environment:
+        description: D1 environment to query
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    environment: ${{ inputs.deployment_environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Export read-only inspection bundle
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          python3 scripts/export_workflow_inspection.py
+          --workflow-run-uuid '${{ inputs.workflow_run_uuid }}'
+          --environment '${{ inputs.deployment_environment }}'
+      - name: Upload private short-lived artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: workflow-inspection-${{ inputs.workflow_run_uuid }}
+          path: test-exports/${{ inputs.deployment_environment }}/**
+          retention-days: 3
+          if-no-files-found: error

@@ -1,0 +1,35 @@
+name = "hirebeat-etl-orchestrator-v1"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+workers_dev = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2"
+database_id = "6c4275ca-faf3-4cba-867c-8ce807c30fc6"
+migrations_dir = "../../migrations"
+migrations_table = "d1_migrations"
+
+[[workflows]]
+name = "hirebeat-workflow-a-v1"
+binding = "WORKFLOW_A"
+class_name = "WorkflowA"
+
+[[workflows]]
+name = "hirebeat-workflow-b-v1"
+binding = "WORKFLOW_B"
+class_name = "WorkflowB"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[vars]
+DEPLOYMENT_STAGE = "staging"
+WORKFLOW_A_VERSION = "workflow-a-v1"
+WORKFLOW_B_VERSION = "workflow-b-v1"
+ML_SERVICE_URL = "REPLACE_WITH_PRIVATE_ML_SERVICE_URL"
+
+# Set these with `wrangler secret put --config workers/etl-orchestrator/wrangler.toml`:
+# ML_SERVICE_AUTH_TOKEN
+# IDENTITY_HMAC_KEY_V1
+# ORCHESTRATOR_INTERNAL_AUTH_TOKEN

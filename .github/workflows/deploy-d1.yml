@@ -15,12 +15,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: hirebeat-d1-production-migrations
+  group: hirebeat-d1-staging-migrations
   cancel-in-progress: false
 
 jobs:
   validate-and-deploy:
     name: Validate schema and apply remote migrations
+    environment: staging
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

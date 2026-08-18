@@ -431,6 +431,10 @@ CREATE INDEX idx_lineage_source_dedup
 CREATE INDEX idx_lineage_source_extraction
   ON application_source_lineage (source_resume_extraction_id);
 
+CREATE UNIQUE INDEX idx_application_source_lineage_one_primary_promotion
+  ON application_source_lineage (source_submission_normalized_id)
+  WHERE relation_role = 'primary_decision_input';
+
 CREATE INDEX idx_person_name_lookup
   ON person_name (normalized_name, person_id);
 

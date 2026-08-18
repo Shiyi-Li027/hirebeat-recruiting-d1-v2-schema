@@ -120,6 +120,12 @@ senior_role_but_no_employment_history
 
 无 anomaly 才继续 similarity；任一 anomaly 直接 `excluded_no_offer`，不创建 similarity row。
 
+Workflow B 不新增“Education/Employment/Skill/Project 必须至少一行”的 ML 技术门禁。
+这些结构化子实体为零行是合法输入，不会导致 similarity service 报错；当前服务只接收
+完整 `resume_text` 与 `position_jd`。结构化 extraction 仍必须区分“parser 技术失败”与
+“parser 成功但该类实体为零行”，并继续服务 Candidate profile、审计和既有 anomaly
+规则。`candidate_profile_almost_empty` 等已经冻结的 anomaly 不因本条决定被删除。
+
 ### `ml_similarity_result`
 
 只有 clean Application 创建一行，保存 Application/Candidate/Position、cosine score、metric 和计算时间。模型及输入 hashes 已在 parent analysis 中冻结，不重复保存。

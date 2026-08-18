@@ -1,0 +1,11 @@
+column_name,required,description
+export_environment,yes,local staging or production
+export_date,yes,UTC calendar date of the export
+workflow_run_uuid,no,Workflow run used to scope the inspection
+file_name,yes,CSV file name inside the run directory
+source_name,yes,D1 table view or named read-only query
+filter_json,yes,JSON description of the exact row filter
+row_count,yes,Number of data rows in the CSV
+sha256,yes,SHA-256 checksum of the completed CSV file
+exporter_version,yes,Version of the export command
+exported_at,yes,UTC RFC 3339 timestamp

@@ -1,0 +1,2 @@
+# Local development placeholders only. Cloudflare Access JWT verification also
+# needs local ACCESS_TEAM_DOMAIN and ACCESS_AUD values in wrangler.toml.

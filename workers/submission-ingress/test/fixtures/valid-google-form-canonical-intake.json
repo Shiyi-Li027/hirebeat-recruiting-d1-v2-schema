@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "canonical-intake-v1",
+  "source": {
+    "sourceSystem": "google_form",
+    "sourceRecordId": "response_test_google_001",
+    "sourceEventKey": "google-form:test:event:001",
+    "submissionUuid": "5d3d871c-93e5-4444-b796-6e26291c0ea7",
+    "sourceSubmittedAt": "2026-08-18T13:00:00.000Z"
+  },
+  "technicalDelivery": {
+    "mechanism": "initial_delivery",
+    "causeCode": null,
+    "deliveredAt": "2026-08-18T13:00:01.000Z"
+  },
+  "catalog": {
+    "companyId": null,
+    "companyName": "",
+    "companyWorkModeId": null,
+    "companyWorkModeName": null,
+    "positionId": null,
+    "positionName": ""
+  },
+  "applicant": {
+    "personName": "",
+    "personEmailAddress": "",
+    "personPhone": null,
+    "startWorkingDate": "",
+    "endWorkingDate": null,
+    "workDuration": null
+  },
+  "resume": {
+    "kind": "pdf_reference",
+    "source": "google_drive",
+    "sourceUrl": null,
+    "sourceFileId": "synthetic-google-drive-file-id",
+    "originalFileName": null,
+    "declaredMimeType": null
+  },
+  "sourceFieldSnapshot": {
+    "fixture": true,
+    "demonstratesRawBusinessFieldsMayBeEmpty": true
+  }
+}

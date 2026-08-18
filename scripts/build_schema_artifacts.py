@@ -33,7 +33,7 @@ BASELINE_MIGRATION_SHA256 = (
 )
 
 EXPECTED_TABLE_COUNT = 84
-EXPECTED_INDEX_COUNT = 118
+EXPECTED_INDEX_COUNT = 120
 
 
 def strip_module_pragma(sql: str) -> str:
@@ -50,7 +50,7 @@ def build_create_sql() -> str:
         "-- HireBeat D1 complete current schema",
         "-- Generated: 2026-08-17",
         "-- Source: 11 confirmed G01-G11 schema modules",
-        "-- Contains schema only: 84 application tables and 118 explicit indexes.",
+        "-- Contains schema only: 84 application tables and 120 explicit indexes.",
         "-- Seed/reference rows must be deployed in later migrations.",
         "-- Do not add BEGIN/COMMIT; D1 executes migrations transactionally.",
         "",

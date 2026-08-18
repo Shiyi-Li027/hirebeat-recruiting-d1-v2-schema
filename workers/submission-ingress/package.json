@@ -1,0 +1,17 @@
+{
+  "name": "@hirebeat/submission-ingress-worker",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "wrangler types worker-configuration.d.ts --config wrangler.toml",
+    "typecheck": "npm run types && tsc --noEmit",
+    "test:unit": "esbuild test/unit/resume-acquisition.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-resume-acquisition-test.mjs && node /tmp/hirebeat-resume-acquisition-test.mjs && esbuild test/unit/parser-client.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-parser-client-test.mjs && node /tmp/hirebeat-parser-client-test.mjs && rm -f /tmp/hirebeat-resume-acquisition-test.mjs /tmp/hirebeat-parser-client-test.mjs",
+    "dev": "wrangler dev --config wrangler.toml",
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "4.123.0"
+  }
+}

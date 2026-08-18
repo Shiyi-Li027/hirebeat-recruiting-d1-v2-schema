@@ -4,12 +4,18 @@
 
 | 文件 | 用途 |
 |---|---|
-| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 当前最新完整建库 SQL；包含 84 张业务表和 118 个显式索引，不包含 seed data |
+| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 当前最新完整建库 SQL；包含 84 张业务表和 120 个显式索引 |
 | `migrations/0001_initial_schema.sql` | 已部署且不可修改的初始 D1 migration；其 SHA-256 由构建和校验脚本保护 |
 | `migrations/0002_add_resume_file_integrity.sql` | 为 R2 原始简历 PDF 增加 SHA-256 完整性字段与 object key 唯一索引 |
 | `migrations/0003_add_versioned_system_configuration.sql` | 增加版本化非敏感运行配置、初始 active release，以及 Intake/Workflow 配置版本指针 |
+| `migrations/0004_seed_pipeline_and_ml_reference_bands.sql` | 写入 13 个招聘阶段、流程模板和 ML threshold reference band |
+| `migrations/0005_freeze_intake_resume_file_hash.sql` | 冻结 Intake 采用的简历文件哈希，支持技术重送和解析复现 |
+| `migrations/0006_seed_global_ml_threshold_policy.sql` | 写入首版实时生产使用的全局 fixed similarity threshold policy |
+| `migrations/0007_seed_minimum_runtime_reference_data.sql` | 写入最小 Contact、Work Mode、Degree reference seed，并补充 ML timeout 配置 |
+| `migrations/0008_enforce_command_idempotency.sql` | 为 Offer、Hiring 与 Catalog command audit 增加幂等唯一索引 |
+| `migrations/0009_enforce_single_application_promotion.sql` | 保证同一 normalized Submission 最多发布为一个 Application primary input |
 | `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 84 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
-| `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成上述三个 SQL 文件 |
+| `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成最新 CREATE/DELETE SQL，并保护已部署 migration 不被改写 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |
 | `wrangler.toml` | Wrangler 与目标 D1 数据库的绑定配置 |
 | `.github/workflows/deploy-d1.yml` | push 到 `main` 后验证并执行远程 D1 migrations |
@@ -18,9 +24,40 @@
 
 1. `DELETE_ALL.sql` **不在** `migrations/` 中，也不会被 GitHub Actions 自动执行。
 2. 不要把 Cloudflare API token、Google service account JSON、`.env` 或 `.dev.vars` 提交到 GitHub。
-3. `migrations/0001_initial_schema.sql` 已经部署后不要原地修改；以后每次 schema 变化都新增 `0002_*.sql`、`0003_*.sql`。
+3. 任意已经部署的 migration 都不得原地修改；以后每次 schema、约束或正式 seed 变化都新增下一个编号的 migration。
 4. `d1_migrations` 记录哪些 migration 已执行。运行 DELETE_ALL.sql 后，该表仍会保留，因此 0001 不会自动重新执行。需要完全重建时，最干净的方法是创建一个新的 D1 database；如果明确要复用原数据库，则在清库后手工执行 CREATE.sql，而不是再次依赖 0001 migration。
 5. 业务代码不得依赖 `SELECT *` 的物理列顺序；必须显式列出字段。完整 CREATE 与按 migration 演进的数据库应保持相同字段集合和约束，构建验证会对当前列定义进行比较。
+
+## 2.1 已冻结的环境边界
+
+本项目采用：
+
+```text
+local → staging → production
+```
+
+- `local` 用于单元测试和本地 D1/R2 模拟；
+- `staging` 使用独立的远程 D1/R2/Worker/Workflow，运行与 production 相同的发布产物；
+- `production` 处理真实候选人 PII、正式招聘决定和 Offer，必须使用独立资源及受保护的
+  GitHub Environment approval。
+
+当前远程 `hirebeat_recruiting_d1_v2` 和
+`hirebeat-hr-raw-resumes-pdf-r2-v1` 已定义为 staging。端到端验证通过后再创建 production
+资源，不能把 staging binding 复用于 production。生产级指代码、契约、测试、审计和恢复
+达到上线标准，不表示跳过 staging、直接使用真实候选人数据测试。
+
+## 2.2 检查 CSV 的集中目录
+
+按需检查导出统一写入仓库工作区：
+
+```text
+test-exports/<environment>/<YYYY-MM-DD>/<workflow_run_uuid>/
+```
+
+同一 run 的 CSV 和 `00_export_manifest.csv` 必须位于同一目录。真实导出被 `.gitignore`
+排除，禁止使用 `git add -f` 写入 Git history。团队共享通过手工 GitHub Actions workflow
+上传为有保留期限的私有 Artifact；仓库只跟踪目录 contract、manifest schema 和脱敏样例。
+导出或 Artifact 上传失败不得改变生产 Workflow 的成功/失败状态。
 
 ## 3. 第一次本地准备
 
@@ -49,7 +86,7 @@ npm run schema:validate
 
 ```text
 84 tables
-118 explicit indexes
+120 explicit indexes
 0 FK violations
 ```
 
@@ -113,6 +150,20 @@ bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
 - R2 PUT 必须幂等。
 - R2 与 D1 不构成跨产品 ACID 事务。
 - R2 上传成功后，再使用短 D1 transaction 发布 Raw metadata、intake 状态和 Workflow A Outbox event。
+
+### Submission Ingress Worker 验证
+
+独立 Worker package 位于 `workers/submission-ingress/`。它已经接通 Airtable/Google adapter、R2、Parser、D1 原子发布和 Workflow A Outbox；部署前必须先配置真实私有服务 URL、Secrets，并在 staging 做端到端验证：
+
+```bash
+cd workers/submission-ingress
+npm install
+npm run typecheck
+npm run test:unit
+npm run deploy:dry-run
+```
+
+合成单元测试不连接任何远程服务。真实写入入口必须使用 `INGRESS_INTERNAL_AUTH_TOKEN`；公开 `workers.dev` 路由保持关闭。R2 与 D1 不具备跨产品 ACID，因此 R2 使用内容哈希稳定 key 和 conditional PUT，随后由单次 D1 `batch()` 原子发布 Raw、Resume metadata、Outbox 与成功状态。完整运行边界见 `15_production_implementation_runbook.md`。
 
 ## 4. 创建新的 Cloudflare D1 database
 
@@ -252,7 +303,7 @@ Settings
 执行顺序：
 
 1. checkout repository；
-2. 按文件名顺序执行全部 migrations，并用 SQLite 内存数据库验证 84 张表、118 个索引和外键；
+2. 按文件名顺序执行全部 migrations，并用 SQLite 内存数据库验证 84 张表、120 个索引和外键；
 3. 检查 `wrangler.toml` 已无占位符；
 4. 使用官方 `cloudflare/wrangler-action@v4`；
 5. 执行 `wrangler d1 migrations apply DB --remote`。
@@ -282,6 +333,39 @@ npx wrangler d1 execute DB --remote --command \
 ```
 
 也可以在 Cloudflare Dashboard 的 D1 Console 检查 `d1_migrations` 是否包含 `0001_initial_schema.sql`。
+
+## 11.1 Staging 运行时部署（Schema migration 之后）
+
+先把三个 Worker 配置中的非敏感占位值替换成真实 staging 值：
+
+- `workers/submission-ingress/wrangler.toml`: `PARSER_SERVICE_URL`；
+- `workers/etl-orchestrator/wrangler.toml`: `ML_SERVICE_URL`；
+- `workers/operations-api/wrangler.toml`: `ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`。
+
+不要把 Token 或 service-account JSON 写进 TOML。使用交互式 Secret 命令：
+
+```bash
+npx wrangler secret put SUBMISSION_HMAC_KEY_V1 --config workers/submission-ingress/wrangler.toml
+npx wrangler secret put INGRESS_INTERNAL_AUTH_TOKEN --config workers/submission-ingress/wrangler.toml
+npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON --config workers/submission-ingress/wrangler.toml
+npx wrangler secret put PARSER_SERVICE_AUTH_TOKEN --config workers/submission-ingress/wrangler.toml
+
+npx wrangler secret put IDENTITY_HMAC_KEY_V1 --config workers/etl-orchestrator/wrangler.toml
+npx wrangler secret put ORCHESTRATOR_INTERNAL_AUTH_TOKEN --config workers/etl-orchestrator/wrangler.toml
+npx wrangler secret put ML_SERVICE_AUTH_TOKEN --config workers/etl-orchestrator/wrangler.toml
+```
+
+如果 Worker 尚不存在，先在 staging 使用关闭的 public route 完成一次 bootstrap deploy，再写 Secrets，然后再次 deploy。三个 Worker 的公开路由必须保持关闭或受 Access/内部网络认证保护。
+
+```bash
+npm run ingress:deploy:staging
+npm run orchestrator:deploy:staging
+npm run operations:deploy:staging
+```
+
+Operations API 必须先建立 Cloudflare Access Self-hosted application。为项目成员建立团队 group，并让 Allow policy 只包含该 group；项目成员可以拥有 Author 权限，但 Operations API 仍以 Access JWT 记录每个操作者的 email/sub。不要共享一个人员 Token 来替代成员身份。
+
+Parser 与 ML 是容器服务，不由 Wrangler Worker 命令部署。它们必须使用私有 URL，并分别配置与 Worker 相同的 `PARSER_SERVICE_AUTH_TOKEN`、`ML_SERVICE_AUTH_TOKEN`。上线前分别调用 authenticated `/ready`。完整运行边界见 `15_production_implementation_runbook.md`。
 
 ## 12. 以后修改 schema 的正确方式
 
