@@ -16,8 +16,16 @@ BASELINE_MIGRATION_SHA256 = (
     "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
 )
 CONFIG = ROOT / "wrangler.toml"
-EXPECTED_TABLE_COUNT = 82
-EXPECTED_INDEX_COUNT = 117
+EXPECTED_TABLE_COUNT = 84
+EXPECTED_INDEX_COUNT = 118
+EXPECTED_SYSTEM_CONFIGURATION = {
+    ("outbox", "max_delivery_attempts"): "8",
+    ("submission_ingress", "active_stale_seconds"): "300",
+    ("submission_ingress", "max_attempts"): "5",
+    ("submission_ingress", "max_resume_file_size_bytes"): "10485760",
+    ("submission_ingress", "parser_timeout_ms"): "30000",
+    ("workflow", "default_step_max_attempts"): "5",
+}
 
 
 def validate(check_config: bool) -> None:
@@ -53,6 +61,48 @@ def validate(check_config: bool) -> None:
             """
         ).fetchone()[0]
         violations = list(connection.execute("PRAGMA foreign_key_check"))
+
+        active_releases = connection.execute(
+            """
+            SELECT configuration_release_key, release_version
+            FROM system_configuration_release
+            WHERE release_status = 'active'
+            """
+        ).fetchall()
+        configuration_items = {
+            (scope, key): value
+            for scope, key, value in connection.execute(
+                """
+                SELECT c.configuration_scope,
+                       c.configuration_key,
+                       c.configuration_value_json
+                FROM system_configuration AS c
+                JOIN system_configuration_release AS r
+                  ON r.id = c.configuration_release_id
+                WHERE r.release_status = 'active'
+                """
+            )
+        }
+        release_columns = {
+            row[1] for row in connection.execute(
+                "PRAGMA table_info(system_configuration_release)"
+            )
+        }
+        configuration_columns = {
+            row[1] for row in connection.execute(
+                "PRAGMA table_info(system_configuration)"
+            )
+        }
+        intake_columns = {
+            row[1]: row[3]
+            for row in connection.execute(
+                "PRAGMA table_info(raw_submission_intake_run)"
+            )
+        }
+        workflow_columns = {
+            row[1]: row[3]
+            for row in connection.execute("PRAGMA table_info(etl_workflow_run)")
+        }
     finally:
         connection.close()
 
@@ -68,6 +118,36 @@ def validate(check_config: bool) -> None:
         )
     if violations:
         raise SystemExit(f"Schema validation failed: FK violations {violations[:20]}")
+    if active_releases != [("hirebeat-system-configuration-v1", 1)]:
+        raise SystemExit(
+            "Schema validation failed: expected exactly one active bootstrap "
+            f"configuration release, found {active_releases}."
+        )
+    if configuration_items != EXPECTED_SYSTEM_CONFIGURATION:
+        raise SystemExit(
+            "Schema validation failed: active system configuration differs "
+            f"from the confirmed bootstrap values: {configuration_items}."
+        )
+    forbidden_release_columns = {"environment_name"} & release_columns
+    forbidden_configuration_columns = {
+        "value_type",
+        "is_sensitive",
+    } & configuration_columns
+    if forbidden_release_columns or forbidden_configuration_columns:
+        raise SystemExit(
+            "Schema validation failed: removed System Configuration columns "
+            "were reintroduced."
+        )
+    if intake_columns.get("configuration_release_id") != 0:
+        raise SystemExit(
+            "Schema validation failed: raw_submission_intake_run."
+            "configuration_release_id must remain nullable for history."
+        )
+    if workflow_columns.get("configuration_release_id") != 0:
+        raise SystemExit(
+            "Schema validation failed: etl_workflow_run."
+            "configuration_release_id must remain nullable for history."
+        )
 
     if check_config:
         config_text = CONFIG.read_text(encoding="utf-8")

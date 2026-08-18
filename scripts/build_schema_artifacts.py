@@ -32,8 +32,8 @@ BASELINE_MIGRATION_SHA256 = (
     "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
 )
 
-EXPECTED_TABLE_COUNT = 82
-EXPECTED_INDEX_COUNT = 117
+EXPECTED_TABLE_COUNT = 84
+EXPECTED_INDEX_COUNT = 118
 
 
 def strip_module_pragma(sql: str) -> str:
@@ -50,7 +50,7 @@ def build_create_sql() -> str:
         "-- HireBeat D1 complete current schema",
         "-- Generated: 2026-08-17",
         "-- Source: 11 confirmed G01-G11 schema modules",
-        "-- Contains schema only: 82 application tables and 117 explicit indexes.",
+        "-- Contains schema only: 84 application tables and 118 explicit indexes.",
         "-- Seed/reference rows must be deployed in later migrations.",
         "-- Do not add BEGIN/COMMIT; D1 executes migrations transactionally.",
         "",
@@ -119,7 +119,7 @@ def build_delete_sql(table_names: list[str]) -> str:
     lines = [
         "-- HireBeat D1 destructive application-table cleanup script",
         "-- Generated: 2026-08-17",
-        "-- WARNING: permanently drops all 82 HireBeat application tables and their data.",
+        "-- WARNING: permanently drops all 84 HireBeat application tables and their data.",
         "-- This intentionally does NOT drop Cloudflare/SQLite internal tables or d1_migrations.",
         "-- Never add this file to migrations/ or an automatic GitHub Actions workflow.",
         "-- Prefer deleting/recreating a disposable D1 database for a completely clean reset.",

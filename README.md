@@ -14,15 +14,15 @@ Current verified baseline:
 
 | Item | Result |
 |---|---:|
-| Confirmed initial tables | 82 |
-| Explicit indexes | 117 |
+| Confirmed current tables | 84 |
+| Explicit indexes | 118 |
 | Confirmed schema groups | 11 |
-| Deferred objects | 11 |
+| Deferred objects | 10 |
 | Removed/replaced legacy objects | 22 |
 | Local foreign-key violations | 0 |
 | Local migration | Passed |
 
-The initial migration creates schema objects only. Reference seeds and the 13 hiring pipeline stage seeds are not yet included and must be added through later versioned migrations.
+The immutable initial migration creates schema objects only. Migration `0003` adds the versioned non-secret system-configuration tables and their initial bootstrap release. Reference seeds and the 13 hiring pipeline stage seeds are still managed separately through later versioned migrations.
 
 ## Architecture / 架构
 
@@ -89,7 +89,7 @@ Responsibility boundary:
 | G01 | Shared reference and talent taxonomy | 21 |
 | G02 | Recruitment catalog and form-option synchronization | 11 |
 | G03 | Submission ingress, raw submission, and raw resume | 3 |
-| G04 | Workflow, step, attempt, outbox, and audit control | 5 |
+| G04 | Versioned configuration, workflow, step, attempt, outbox, and audit control | 7 |
 | G05 | Normalization and structured resume extraction | 8 |
 | G06 | Deduplication and Application admission | 3 |
 | G07 | Person, Application, Candidate core, and lineage | 7 |
@@ -97,7 +97,7 @@ Responsibility boundary:
 | G09 | Real-time ML analysis and recommendation | 5 |
 | G10 | Hiring pipeline and actual stage execution | 5 |
 | G11 | Offer lifecycle | 3 |
-| **Total** | **Initial production schema** | **82** |
+| **Total** | **Current production schema** | **84** |
 
 Detailed group responsibilities and decisions are documented in [`00_master_table_groups.md`](00_master_table_groups.md). The table-level inventory is available in [`00_master_table_inventory.csv`](00_master_table_inventory.csv).
 
@@ -121,7 +121,8 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 ├── .github/workflows/deploy-d1.yml
 ├── migrations/
 │   ├── 0001_initial_schema.sql
-│   └── 0002_add_resume_file_integrity.sql
+│   ├── 0002_add_resume_file_integrity.sql
+│   └── 0003_add_versioned_system_configuration.sql
 ├── schema/
 │   ├── HIREBEAT_D1_CREATE_2026-08-17.sql
 │   └── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
@@ -170,7 +171,7 @@ npm run schema:validate
 Expected result:
 
 ```text
-Schema validation succeeded: 2 migrations, 82 tables, 117 explicit indexes, 0 FK violations.
+Schema validation succeeded: 3 migrations, 84 tables, 118 explicit indexes, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库
@@ -223,7 +224,7 @@ npx wrangler d1 execute DB --local --command \
   "PRAGMA foreign_key_check;"
 ```
 
-The expected table count is `82`; a successful foreign-key check returns no violation rows.
+The expected table count is `84`; a successful foreign-key check returns no violation rows.
 
 ## GitHub Actions deployment / 自动部署
 
@@ -278,7 +279,7 @@ Each migration must be tested locally before being pushed to `main`.
 
 ## Destructive reset warning / 清库警告
 
-`schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` permanently drops all 82 HireBeat business tables and their data. It does not drop `d1_migrations` or Cloudflare internal tables.
+`schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` permanently drops all 84 HireBeat business tables and their data. It does not drop `d1_migrations` or Cloudflare internal tables.
 
 Never place this file in `migrations/`, never execute it from automatic CI/CD, and never run it against production without an approved backup and recovery plan. For a completely clean development reset, creating a new disposable D1 database is safer than reusing a migration-managed database after manual table deletion.
 

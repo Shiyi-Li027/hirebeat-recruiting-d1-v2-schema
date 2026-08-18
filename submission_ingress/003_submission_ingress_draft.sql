@@ -45,6 +45,7 @@ CREATE TABLE raw_submission_intake_run (
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  configuration_release_id INTEGER,
   UNIQUE (source_system, source_record_id),
   UNIQUE (
     id,
@@ -53,6 +54,8 @@ CREATE TABLE raw_submission_intake_run (
     source_record_id,
     source_event_key
   ),
+  FOREIGN KEY (configuration_release_id)
+    REFERENCES system_configuration_release(id) ON DELETE RESTRICT,
   CHECK (length(trim(intake_run_uuid)) > 0),
   CHECK (length(trim(submission_uuid)) > 0),
   CHECK (length(trim(source_system)) > 0),
@@ -150,11 +153,11 @@ CREATE TABLE raw_submission_resume (
   resume_mime_type TEXT,
   resume_file_size_bytes INTEGER
     CHECK (resume_file_size_bytes IS NULL OR resume_file_size_bytes >= 0),
-  resume_file_sha256 TEXT
-    CHECK (resume_file_sha256 IS NULL OR length(resume_file_sha256) = 64),
   resume_r2_object_key TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  resume_file_sha256 TEXT
+    CHECK (resume_file_sha256 IS NULL OR length(resume_file_sha256) = 64),
   FOREIGN KEY (raw_submission_id)
     REFERENCES raw_submission(id) ON DELETE CASCADE,
   CHECK (

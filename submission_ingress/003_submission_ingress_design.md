@@ -47,6 +47,7 @@ D1 `batch()` 可以保证同一次 Raw publish 中的 SQL 共同成功或回滚�
 - `last_technical_redelivery_mechanism`、`last_technical_redelivery_cause_code` 和 `last_technical_redelivery_at` 分别保存最近一次技术重送采用的机制、触发它的根因以及时间，避免把“Queue 如何重送”和“为什么需要重送”混成一个值；
 - `payload_conflict_count` 记录同一个来源 ID 携带不同 payload 的冲突；
 - 只保存 HMAC 和非敏感错误，不在运行日志复制完整 PII payload。
+- `configuration_release_id` 冻结该 logical intake 首次开始处理时采用的非敏感系统配置版本；migration 前历史记录允许 NULL，新生产运行必须填写且 retry 不得静默换版。
 
 一条 `raw_submission_intake_run` 表示一个逻辑来源事件，不是每次网络请求都创建新行。首版只保存最后一次技术错误摘要；如果未来确实需要数据库内完整保存每一次 ingress retry，再延后增加 `raw_submission_intake_attempt`，而不是现在提前增加第三张表。
 
@@ -499,5 +500,6 @@ UNIQUE(source_system, source_record_id)
 12. 已确认 `submission_normalized` 不复制 Resume 长文本；后续 extraction 从精确 `submission_normalized_id` 经 `raw_submission_id` 读取 `raw_submission_resume.resume_text`。
 13. 已确认首版不在 Initial Cleaning 设置英语/非英语语言门禁。
 14. 已确认 Initial Cleaning 的 Resume 技术长度底线为清理后的有效非空白 Unicode 字符数至少 100；该规则只检测严重缺失/解析残片，不判断语言或 Resume 业务质量。
+15. `raw_submission_intake_run.configuration_release_id` 为 nullable G04 FK；nullable 只用于兼容 migration 前历史，生产 Ingress 必须冻结当次 active release，并在所有技术 retry 中复用。
 
 特别修正：终结性 `no_resume`、`parse_failed_terminal` 或短文本不是 Ingress 拒绝 Raw 的理由。Raw 与一对一 Resume 结果仍完整落地并把 intake 标为 `succeeded`；Workflow A Initial Cleaning 负责记录业务 Block，并且不创建 `submission_normalized`。因此首版不再使用 `rejected_input` intake 状态。

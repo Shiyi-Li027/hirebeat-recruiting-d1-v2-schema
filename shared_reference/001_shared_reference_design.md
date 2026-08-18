@@ -285,3 +285,41 @@ g01_location_education_reference_audit.csv
 - 因此已被引用的行通常设置 `is_active = 0`，而不是物理删除。
 
 “共享字典”在本项目语境中基本等同于“共享 Reference tables”，但并不意味着所有 Reference table 都必须在 G01。例如 `company` 和 `position` 也是参考/目录性质的数据，但由于它们具有独立业务生命周期、表单同步和 active 管理，被放在 G02 Recruitment Catalog，而不是 G01。
+
+## 12. Reference Data 变更策略
+
+本组正式冻结以下跨数据库和 Workflow 通用规则：
+
+1. Reference row 的主键、稳定 code 和 UUID 一旦发布便不可修改。
+2. 已发布或已被引用的 Reference row 不做普通物理删除；停止未来使用时设置 `is_active = 0`。
+3. 只有拼写、大小写、展示名称等不改变业务语义的修正，才允许原地 `UPDATE`。
+4. 如果分类含义、排序、适用范围或业务语义发生改变，必须创建新 Reference row，并停用旧 row；不能通过改写旧 row 偷偷改变历史业务记录的含义。
+5. Reference 停用只控制未来选择、映射和发布，不追溯使历史 Application、Candidate、ML result 或 Offer 失效。
+6. 已发布 Application、ML 和 Offer 使用各自已经冻结的 ID、输入快照或业务文本快照；Reference 后续变化不得追溯改写这些终态结果。
+7. 重要 Reference 创建、展示名称修正、停用、替换或合并写入 G04 `audit_event`；高频技术错误仍进入 Cloudflare Logs，不复制成 Reference 审计事件。
+8. 影响 Airtable、Google Form 或未来网页可选项的 Catalog 有效集合变化，通过 G02 创建新的 `catalog_revision`，再由 Outbox 驱动对应渠道同步。
+
+推荐的重要 Reference 审计事件类型包括：
+
+```text
+reference_created
+reference_display_name_updated
+reference_deactivated
+reference_replaced
+reference_merged
+```
+
+事件应保存 Reference 类型、记录 ID、非敏感修改前后值、修改原因、操作者和发生时间。审计事件不得复制 Secret 或不必要的候选人 PII。
+
+### 正在运行的 Workflow
+
+- 尚未通过 Initial Cleaning 或 Application admission 的新 Submission，在对应边界重新验证 Reference 是否存在、归属正确且仍允许未来使用。
+- 已经发布的 Application 不因普通 Reference 停用而被静默删除、重写或自动改变招聘决定。
+- 已经生成的 ML result 和 Offer 继续使用当次冻结的输入、policy 和文本快照。
+- 如果 Reference 变化涉及法律、安全或重大数据错误，应通过显式的 block、cancel、supersede 或受控 migration 处理，不能依靠普通名称更新隐式改变业务结果。
+
+### 重复 Reference 的合并
+
+发现重复 row 时选择一个 canonical row。尚未发布、仍处于 draft/current operational 状态且明确允许迁移的记录，可以通过受控 migration 改指 canonical ID；终态历史事实默认保持原引用。旧 row 在迁移后设置 `is_active = 0`。业务代码不得通过 `ON DELETE CASCADE` 批量删除引用历史。
+
+首版不为全部 G01 表创建各自的 temporal/version history。`updated_at` 表示当前记录最后修改时间，`audit_event` 记录重要变更；将统一 `reference_data_release` 及 Workflow 冻结 Reference release 的能力保留为未来增强项。

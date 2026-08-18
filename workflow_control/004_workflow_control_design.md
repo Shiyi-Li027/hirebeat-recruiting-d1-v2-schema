@@ -1,4 +1,4 @@
-# Group G04：Workflow、Step、Attempt、Outbox 与 Audit（Confirmed Revision 1）
+# Group G04：System Configuration、Workflow、Step、Attempt、Outbox 与 Audit（Confirmed Revision 2）
 
 版本日期：2026-08-17  
 对应 SQL：`004_workflow_control_draft.sql`  
@@ -6,9 +6,11 @@
 
 面向初学者的完整启动流程和逐字段字典见：`004_workflow_control_beginner_guide.md`。
 
-## 1. 本组为什么需要五张表
+## 1. 本组为什么需要七张表
 
 ```text
+system_configuration_release
+system_configuration
 etl_workflow_run
 etl_step_run
 etl_step_attempt
@@ -16,10 +18,12 @@ outbox_event
 audit_event
 ```
 
-五张表不是重复日志：
+七张表不是重复日志：
 
 | 表 | 回答的问题 |
 |---|---|
+| `system_configuration_release` | 这次运行采用的是哪一整套已发布技术参数？ |
+| `system_configuration` | 该 release 中每个非敏感参数的具体 JSON 值是什么？ |
 | `etl_workflow_run` | 这条 Raw/Application 的整段 Workflow 最终怎么样了？ |
 | `etl_step_run` | normalization、resume extraction、dedup、publish 等逻辑步骤各自怎么样了？ |
 | `etl_step_attempt` | 某一步因网络、限流、超时或代码错误实际执行了几次？ |
@@ -27,6 +31,55 @@ audit_event
 | `audit_event` | 哪个系统/管理员在何时做了重要业务变更，为什么？ |
 
 `D1 batch()` 只解决一次短数据库调用内共同成功/回滚。G04 解决跨秒、跨分钟、跨 Worker、跨外部 API 的持久状态、重试与补偿；两者不能互相替代。
+
+### 1.1 版本化 System Configuration
+
+`system_configuration_release` 是一整套配置的发布版本；`system_configuration` 是该版本下的参数明细。首版不创建 `environment_name`、`value_type` 或 `is_sensitive`，也绝不保存 Secret。
+
+核心约束：
+
+```text
+configuration_release_key         NOT NULL UNIQUE
+release_version                   NOT NULL UNIQUE
+release_status                    NOT NULL
+configuration_release_id          NOT NULL FK
+configuration_scope/key/value     NOT NULL
+description/actor/lifecycle time  nullable
+```
+
+Partial unique index 保证同一时间最多一个 `active` release，同时允许多个 draft/superseded/retired。激活新版时必须在同一个短 D1 `batch()` 中先 supersede 旧 active、再 activate 新版；任一步失败则共同回滚。
+
+`raw_submission_intake_run.configuration_release_id` 与 `etl_workflow_run.configuration_release_id` 均允许 NULL，以兼容 migration 前历史记录；新生产运行必须由代码写入启动时选定的 release，后续 retry 继续使用同一个被冻结版本。
+
+#### `system_configuration_release` 字段
+
+| 字段 | 可空 | 作用 |
+|---|---:|---|
+| `id` | 否 | D1 内部主键 |
+| `configuration_release_key` | 否 | 稳定、人可读且全库唯一的 release 身份 |
+| `release_version` | 否 | 单调增加的整数版本；全库唯一 |
+| `release_status` | 否 | `draft`、`active`、`superseded` 或 `retired` |
+| `release_description` | 是 | 本次参数变化的非敏感说明 |
+| `activated_at` | 是 | 进入 active 的 UTC 时间；draft 时为空 |
+| `superseded_at` | 是 | 被新版替代的 UTC 时间 |
+| `created_by` | 是 | 创建者/服务标识；无法确定时允许 NULL |
+| `activated_by` | 是 | 激活者/服务标识；未激活时允许 NULL |
+| `created_at` | 否 | release 行创建时间 |
+| `updated_at` | 否 | 状态或可变元数据最后更新时间 |
+
+#### `system_configuration` 字段
+
+| 字段 | 可空 | 作用 |
+|---|---:|---|
+| `id` | 否 | D1 内部主键 |
+| `configuration_release_id` | 否 | 所属 release 的正式 FK；删除行为 RESTRICT |
+| `configuration_scope` | 否 | 参数所属模块，例如 `submission_ingress`、`workflow`、`outbox` |
+| `configuration_key` | 否 | scope 内参数名 |
+| `configuration_value_json` | 否 | 合法 JSON 标量或对象；Worker 按已知 key 验证业务类型和范围 |
+| `description` | 是 | 参数用途和单位说明 |
+| `created_at` | 否 | 参数行创建时间；发布后参数行按不可变版本使用 |
+
+首个 active release 为 `hirebeat-system-configuration-v1`，包含：Parser timeout 30000 ms、Intake stale 300 秒、Ingress 总尝试 5 次、Resume PDF 最大 10485760 bytes、Workflow step 默认 5 次和 Outbox 最大投递 8 次。
 
 ## 2. 顶层 Workflow 边界
 
@@ -525,7 +578,7 @@ intake/workflow/step/attempt 日志
 
 ## 12. 已确认边界
 
-1. G04 首版创建五张表，不合并成一张无法区分 Workflow、Step、Attempt、Outbox 和业务审计的日志表。
+1. G04 当前创建七张表：两张版本化非敏感配置表，以及五张不能合并的 Workflow、Step、Attempt、Outbox 和业务审计表。
 2. `etl_workflow_run` 一次只能直接属于 Raw 或 Application 之一。
 3. Workflow 主状态不增加 `failed_retryable`；瞬态失败由 step/attempt 表达，Workflow 保持 running/waiting，耗尽后才进入 terminal/compensation 状态。
 4. Step attempt 开始时插入，终结时只完成一次，终结后不可改写；新的技术 retry 创建下一条 attempt。

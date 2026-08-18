@@ -164,6 +164,15 @@ outbox_event
 audit_event
 ```
 
+### 已确认、等待下一条 migration 增加
+
+```text
+system_configuration_release
+system_configuration
+```
+
+两张表采用版本发布模型；首版不保存 `environment_name`、`value_type` 或 `is_sensitive`。可选说明、操作者和生命周期时间允许 `NULL`，核心 identity/ownership/status/value/timestamp 保留最小必要 `NOT NULL`。已确认使用可直接删除的 partial unique index，保证同一时间最多一个 `active` release，同时允许多个 `draft`、`superseded` 和 `retired` release 共存。
+
 当前状态：`confirmed`，Revision 1（2026-08-17）。
 
 主要变化：
@@ -426,7 +435,6 @@ position_work_mode
 
 ```text
 recruiting_policy
-system_configuration
 submission_form_session
 form_draft
 offer_document
@@ -441,7 +449,6 @@ ml_scorecard_result
 触发建立条件：
 
 - `recruiting_policy`：Company/Position submission limit、ML authority 或其他政策需要版本化。
-- `system_configuration`：可变系统配置不能继续安全地使用 Worker vars 时。
 - `submission_form_session`/`form_draft`：开始建设自有申请入口或可控 session gateway 时。
 - `offer_document`：正式生成、保存或签发 Offer 文件时。
 - `offer_approval`：需要独立预算/人工审批记录，而不只是 stage decision 时。
@@ -452,7 +459,7 @@ ml_scorecard_result
 - `ml_scorecard_result`：主观权重经过招聘方确认、标签或人工评估验证及公平性检查后再增加。
 - `group_top_ratio` 及排名字段：只有恢复冻结 cohort 的相对比例选择时才通过 migration 增加，不能用于实时单条 Offer 决策。
 
-当前状态：`confirmed deferred review`（2026-08-17）。以上对象全部不进入首版 `CREATE.sql`；只有对应触发条件真实出现后，才通过独立 migration 建立。
+当前状态：`confirmed deferred review`（2026-08-17）。以上 10 个对象全部不进入当前 Schema；只有对应触发条件真实出现后，才通过独立 migration 建立。`system_configuration_release` 与 `system_configuration` 已退出 deferred 清单，并由 G04 的 `0003_add_versioned_system_configuration.sql` 增加。
 
 ## 15. Group 99 — 已删除或替代的旧表
 
@@ -518,4 +525,4 @@ Master Inventory 中：
 - `deferred` 表不会进入第一版 `CREATE.sql`；
 - `removed` 表只留在迁移/差异台账，不会创建。
 
-本轮确认后的首版初始表数量冻结为 82 张；deferred 11 张、removed 22 张均不进入首版 `CREATE.sql`。最终组装文件仍需执行全库依赖顺序、空库创建、外键、索引和关键插入路径审计。
+当前完整 migration set 的表数量为 84 张；deferred 10 张、removed 22 张不进入当前 `CREATE.sql`。不可变 `0001` 基线仍保持 82 张；版本化 System Configuration 由后续 migration 增加。最终组装文件仍需执行全库依赖顺序、空库创建、外键、索引和关键插入路径审计。

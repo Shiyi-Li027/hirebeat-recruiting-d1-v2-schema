@@ -1,14 +1,16 @@
-# G04 Workflow Control 新手完整指南（Confirmed Revision 1）
+# G04 Workflow Control 新手完整指南（Confirmed Revision 2）
 
 版本日期：2026-08-17  
 对应 Schema：`004_workflow_control_draft.sql`  
 读者：第一次接触数据工程、异步任务、Workflow、Outbox 的开发者
 
-## 1. 先用一个生活例子理解五张表
+## 1. 先用一个生活例子理解七张表
 
 把一条岗位申请想成一份需要经过多个部门处理的文件：
 
 ```text
+整套工作规则版本    = system_configuration_release
+规则版本中的单项参数 = system_configuration
 总工单            = etl_workflow_run
 工单中的每道工序  = etl_step_run
 某道工序第几次尝试 = etl_step_attempt
@@ -46,6 +48,8 @@ Application Publish 完成后需要启动 Workflow B：
 ```text
 写入 1 条 audit_event(application_decision_overridden)
 ```
+
+例如 `hirebeat-system-configuration-v1` 是当前生效的整套规则；其中分别保存 Parser 30 秒超时、Intake 5 分钟 stale、最多 5 次处理等参数。一次 Intake 或 Workflow 启动后冻结所采用的 release，重试过程中不会静默换成新版规则。
 
 ## 2. Outbox 为什么能够启动 Workflow
 
@@ -494,9 +498,14 @@ Cloudflare Workflow instance 使用确定性 ID；如果 `create()` 返回“ID 
 
 Audit 没有 `updated_at`。如果历史 Audit 写错，不能静默修改原行；应追加 correction Audit 并关联原 event。
 
-## 9. 五张表之间的完整关系
+## 9. 七张表之间的完整关系
 
 ```text
+system_configuration_release
+    ├── system_configuration (1..N)
+    ├── raw_submission_intake_run (采用的 release，可空兼容历史)
+    └── etl_workflow_run (采用的 release，可空兼容历史)
+
 raw_submission
     │
     ├── outbox_event: workflow_a_requested

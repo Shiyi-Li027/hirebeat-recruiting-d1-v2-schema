@@ -1,7 +1,7 @@
 -- HireBeat D1 complete current schema
 -- Generated: 2026-08-17
 -- Source: 11 confirmed G01-G11 schema modules
--- Contains schema only: 82 application tables and 117 explicit indexes.
+-- Contains schema only: 84 application tables and 118 explicit indexes.
 -- Seed/reference rows must be deployed in later migrations.
 -- Do not add BEGIN/COMMIT; D1 executes migrations transactionally.
 
@@ -611,6 +611,7 @@ CREATE TABLE raw_submission_intake_run (
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  configuration_release_id INTEGER,
   UNIQUE (source_system, source_record_id),
   UNIQUE (
     id,
@@ -619,6 +620,8 @@ CREATE TABLE raw_submission_intake_run (
     source_record_id,
     source_event_key
   ),
+  FOREIGN KEY (configuration_release_id)
+    REFERENCES system_configuration_release(id) ON DELETE RESTRICT,
   CHECK (length(trim(intake_run_uuid)) > 0),
   CHECK (length(trim(submission_uuid)) > 0),
   CHECK (length(trim(source_system)) > 0),
@@ -716,11 +719,11 @@ CREATE TABLE raw_submission_resume (
   resume_mime_type TEXT,
   resume_file_size_bytes INTEGER
     CHECK (resume_file_size_bytes IS NULL OR resume_file_size_bytes >= 0),
-  resume_file_sha256 TEXT
-    CHECK (resume_file_sha256 IS NULL OR length(resume_file_sha256) = 64),
   resume_r2_object_key TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  resume_file_sha256 TEXT
+    CHECK (resume_file_sha256 IS NULL OR length(resume_file_sha256) = 64),
   FOREIGN KEY (raw_submission_id)
     REFERENCES raw_submission(id) ON DELETE CASCADE,
   CHECK (
@@ -776,10 +779,52 @@ CREATE UNIQUE INDEX uq_raw_submission_resume_r2_object_key
 -- BEGIN SOURCE MODULE: workflow_control/004_workflow_control_draft.sql
 -- ============================================================
 -- HireBeat D1 new schema
--- Group G04: workflow control, retry attempts, outbox, and audit
--- Confirmed Revision 1, 2026-08-17
+-- Group G04: versioned system configuration, workflow control, retry
+-- attempts, outbox, and audit
+-- Confirmed Revision 2, 2026-08-17
 -- Requires G03 raw_submission. The application FK resolves when the complete
 -- initial schema is assembled with G07.
+CREATE TABLE system_configuration_release (
+  id INTEGER PRIMARY KEY,
+  configuration_release_key TEXT NOT NULL UNIQUE,
+  release_version INTEGER NOT NULL,
+  release_status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (
+      release_status IN (
+        'draft',
+        'active',
+        'superseded',
+        'retired'
+      )
+    ),
+  release_description TEXT,
+  activated_at TEXT,
+  superseded_at TEXT,
+  created_by TEXT,
+  activated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (release_version)
+);
+
+CREATE TABLE system_configuration (
+  id INTEGER PRIMARY KEY,
+  configuration_release_id INTEGER NOT NULL,
+  configuration_scope TEXT NOT NULL,
+  configuration_key TEXT NOT NULL,
+  configuration_value_json TEXT NOT NULL,
+  description TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (configuration_release_id)
+    REFERENCES system_configuration_release(id) ON DELETE RESTRICT,
+  UNIQUE (
+    configuration_release_id,
+    configuration_scope,
+    configuration_key
+  ),
+  CHECK (json_valid(configuration_value_json))
+);
+
 CREATE TABLE etl_workflow_run (
   id INTEGER PRIMARY KEY,
   workflow_run_uuid TEXT NOT NULL UNIQUE,
@@ -817,6 +862,7 @@ CREATE TABLE etl_workflow_run (
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  configuration_release_id INTEGER,
   FOREIGN KEY (parent_workflow_run_id)
     REFERENCES etl_workflow_run(id) ON DELETE RESTRICT,
   FOREIGN KEY (raw_submission_id)
@@ -825,6 +871,8 @@ CREATE TABLE etl_workflow_run (
     REFERENCES application(id) ON DELETE RESTRICT,
   FOREIGN KEY (trigger_outbox_event_id)
     REFERENCES outbox_event(id) ON DELETE RESTRICT,
+  FOREIGN KEY (configuration_release_id)
+    REFERENCES system_configuration_release(id) ON DELETE RESTRICT,
   CHECK (length(trim(workflow_run_uuid)) > 0),
   CHECK (length(trim(workflow_type)) > 0),
   CHECK (length(trim(workflow_version)) > 0),
@@ -1003,6 +1051,10 @@ CREATE TABLE audit_event (
   CHECK (length(trim(event_summary)) > 0),
   CHECK (event_metadata_json IS NULL OR json_valid(event_metadata_json))
 );
+
+CREATE UNIQUE INDEX uq_system_configuration_release_single_active
+  ON system_configuration_release (release_status)
+  WHERE release_status = 'active';
 
 CREATE INDEX idx_etl_workflow_status_progress
   ON etl_workflow_run (workflow_status, last_progressed_at);

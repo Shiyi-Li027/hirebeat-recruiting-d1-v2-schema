@@ -4,10 +4,11 @@
 
 | 文件 | 用途 |
 |---|---|
-| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 当前最新完整建库 SQL；包含 82 张业务表和 117 个显式索引，不包含 seed data |
+| `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` | 当前最新完整建库 SQL；包含 84 张业务表和 118 个显式索引，不包含 seed data |
 | `migrations/0001_initial_schema.sql` | 已部署且不可修改的初始 D1 migration；其 SHA-256 由构建和校验脚本保护 |
 | `migrations/0002_add_resume_file_integrity.sql` | 为 R2 原始简历 PDF 增加 SHA-256 完整性字段与 object key 唯一索引 |
-| `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 82 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
+| `migrations/0003_add_versioned_system_configuration.sql` | 增加版本化非敏感运行配置、初始 active release，以及 Intake/Workflow 配置版本指针 |
+| `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 84 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
 | `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成上述三个 SQL 文件 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |
 | `wrangler.toml` | Wrangler 与目标 D1 数据库的绑定配置 |
@@ -19,6 +20,7 @@
 2. 不要把 Cloudflare API token、Google service account JSON、`.env` 或 `.dev.vars` 提交到 GitHub。
 3. `migrations/0001_initial_schema.sql` 已经部署后不要原地修改；以后每次 schema 变化都新增 `0002_*.sql`、`0003_*.sql`。
 4. `d1_migrations` 记录哪些 migration 已执行。运行 DELETE_ALL.sql 后，该表仍会保留，因此 0001 不会自动重新执行。需要完全重建时，最干净的方法是创建一个新的 D1 database；如果明确要复用原数据库，则在清库后手工执行 CREATE.sql，而不是再次依赖 0001 migration。
+5. 业务代码不得依赖 `SELECT *` 的物理列顺序；必须显式列出字段。完整 CREATE 与按 migration 演进的数据库应保持相同字段集合和约束，构建验证会对当前列定义进行比较。
 
 ## 3. 第一次本地准备
 
@@ -46,8 +48,8 @@ npm run schema:validate
 预期结果必须是：
 
 ```text
-82 tables
-117 explicit indexes
+84 tables
+118 explicit indexes
 0 FK violations
 ```
 
@@ -250,7 +252,7 @@ Settings
 执行顺序：
 
 1. checkout repository；
-2. 按文件名顺序执行全部 migrations，并用 SQLite 内存数据库验证 82 张表、117 个索引和外键；
+2. 按文件名顺序执行全部 migrations，并用 SQLite 内存数据库验证 84 张表、118 个索引和外键；
 3. 检查 `wrangler.toml` 已无占位符；
 4. 使用官方 `cloudflare/wrangler-action@v4`；
 5. 执行 `wrangler d1 migrations apply DB --remote`。
@@ -311,7 +313,7 @@ npx wrangler d1 execute DB --remote \
   --file="schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql"
 ```
 
-它只删除本项目的 82 张业务表，不删除 `d1_migrations`。如果目的是从零重新测试 migration，推荐删除并重新创建一个新的测试 D1 database，然后更新 `wrangler.toml` 的 UUID。
+它只删除本项目的 84 张业务表，不删除 `d1_migrations`。如果目的是从零重新测试 migration，推荐删除并重新创建一个新的测试 D1 database，然后更新 `wrangler.toml` 的 UUID。
 
 ## 14. 常用排错
 

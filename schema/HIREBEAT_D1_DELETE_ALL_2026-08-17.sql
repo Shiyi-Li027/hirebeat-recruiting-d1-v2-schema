@@ -1,6 +1,6 @@
 -- HireBeat D1 destructive application-table cleanup script
 -- Generated: 2026-08-17
--- WARNING: permanently drops all 82 HireBeat application tables and their data.
+-- WARNING: permanently drops all 84 HireBeat application tables and their data.
 -- This intentionally does NOT drop Cloudflare/SQLite internal tables or d1_migrations.
 -- Never add this file to migrations/ or an automatic GitHub Actions workflow.
 -- Prefer deleting/recreating a disposable D1 database for a completely clean reset.
@@ -54,6 +54,8 @@ DROP TABLE IF EXISTS "outbox_event";
 DROP TABLE IF EXISTS "etl_step_attempt";
 DROP TABLE IF EXISTS "etl_step_run";
 DROP TABLE IF EXISTS "etl_workflow_run";
+DROP TABLE IF EXISTS "system_configuration";
+DROP TABLE IF EXISTS "system_configuration_release";
 DROP TABLE IF EXISTS "raw_submission_resume";
 DROP TABLE IF EXISTS "raw_submission";
 DROP TABLE IF EXISTS "raw_submission_intake_run";

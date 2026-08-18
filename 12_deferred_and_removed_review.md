@@ -12,12 +12,11 @@
 
 不为“以后也许会用”提前创建空表，可以减少首版外键、索引、迁移和维护负担，同时保留清楚的扩展路线。
 
-## 2. G12：11 张延后表
+## 2. G12：10 张延后表
 
 | 表 | 首版为什么不创建 | 何时触发 migration |
 |---|---|---|
 | `recruiting_policy` | 当前只有 Company 默认最多提交 5 次，尚无可靠的复杂 policy 数据 | 出现 Company/Position override、有效期、审批或多项规则版本化需求 |
-| `system_configuration` | 当前非敏感静态配置可使用 Worker vars，敏感配置使用 Secrets | 需要管理员在不部署代码时修改、版本化和审计运行配置 |
 | `submission_form_session` | Airtable/Google Form 不能可靠表达每个用户独立冻结的目录 session | 建设自有网页或受控 session gateway |
 | `form_draft` | 当前不保存跨会话草稿 | 自有网页需要自动保存、恢复和过期草稿 |
 | `offer_document` | 当前只创建 Offer master/version，没有正式文件生成服务 | 开始生成、保存、签发或电子签名 Offer 文件 |
@@ -27,6 +26,10 @@
 | `ml_feature_pipeline_version` | 首版只冻结当前代码/config hash | preprocessing/features 需要独立于模型进行正式版本治理 |
 | `ml_profile_cluster_result` | 单条实时流程不使用 KMeans/PCA 决策 | 出现冻结 cohort 的离线群体分析，并验证真实业务价值 |
 | `ml_scorecard_result` | 原主观 Scorecard 未参与最终决定且缺少验证 | 权重经招聘方、标签、人工评估和公平性验证后恢复 |
+
+### 已退出 deferred、等待下一条 migration
+
+`system_configuration_release` 与 `system_configuration` 已确认为生产 Ingress/Workflow 上线前需要的 G04 控制平面表。首版采用最小必要 `NOT NULL`，不创建 `environment_name`、`value_type` 或 `is_sensitive`；Secret 继续只存 Cloudflare Secrets。已确认使用 partial unique index 保证最多一个 active release。该决定不修改已部署的 `0001`/`0002`，而通过新的有序 migration 实现。
 
 与 G12 同时记录、但不是当前表名的 deferred 字段能力：
 
@@ -104,7 +107,7 @@ application_stage_history
 
 组员项目采用较小的 `companies/roles/applicants/applications/application_submissions` 模型，没有上述大多数扩展表。新版没有因为需要更丰富业务能力就把旧版全部 81 张表照搬回来，而是：
 
-- 真实首版能力进入 82 张确认表；
+- 当前真实能力进入 84 张确认表；
 - 不成熟但合理的扩展进入 G12；
 - 已替代或无业务价值的旧实体进入 G99；
 - 不允许 adapter 的自由文本 `findOrCreateCompany/Role` 替代权威 Catalog；
@@ -114,14 +117,13 @@ application_stage_history
 
 原版先建立广泛 Schema，再逐 Cell 导入，导致部分表长期为空、Application Cycle 全是 unknown、运行状态散落在输出和 CSV。新版反向设计：只有存在明确 owner、输入、写入 step、幂等规则和查询用途的表进入 initial Schema。
 
-因此“新版 82 张”不表示机械增加复杂度：它包含原版没有的生产控制面（Ingress、Workflow、Outbox、版本与历史），同时删除 22 张不再适合的旧表，并延后 11 张没有当前写入能力的扩展。
+因此“新版 84 张”不表示机械增加复杂度：它包含原版没有的生产控制面（Ingress、Workflow、Outbox、版本化 System Configuration 与历史），同时删除 22 张不再适合的旧表，并延后 10 张没有当前写入能力的扩展。
 
 ## 6. 最终确认
 
-1. 11 张 G12 表全部不进入首版 `CREATE.sql`。
+1. 10 张 G12 表不进入当前 `CREATE.sql`；两张 System Configuration 表已经通过后续 migration 进入 G04。
 2. 22 张 G99 表全部不进入首版 `CREATE.sql`。
 3. Deferred 只在明确触发条件出现后通过 migration 增加。
 4. Removed 不允许未经重新审核直接恢复旧定义。
 5. 首版 importer/Workflow 不得向不存在的 deferred/removed 表写入。
 6. 测试 CSV 可以报告 deferred capability 为未启用，但不得生成假数据库记录。
-

@@ -11,7 +11,7 @@
 | G01 | 共享 Reference 与人才分类 | 21 | confirmed |
 | G02 | Company/Work Mode/Position Catalog 与目录同步 | 11 | confirmed |
 | G03 | Ingress、Raw Submission、Raw Resume | 3 | confirmed |
-| G04 | Workflow、Step、Attempt、Outbox、Audit | 5 | confirmed |
+| G04 | Workflow、Step、Attempt、Outbox、Audit、System Configuration | 7 | confirmed revision 2 |
 | G05 | Normalization 与 Resume 结构化提取 | 8 | confirmed |
 | G06 | Dedup 与 Application 准入 | 3 | confirmed |
 | G07 | Person、Application、Candidate Core | 7 | confirmed |
@@ -19,14 +19,16 @@
 | G09 | 实时 ML 分析与 Recommendation | 5 | confirmed |
 | G10 | Hiring Pipeline 与实际 Stage 运行 | 5 | confirmed |
 | G11 | Offer 生命周期 | 3 | confirmed |
-| G12 | 未来扩展 | 0 | 11 deferred objects confirmed |
+| G12 | 未来扩展 | 0 | 10 deferred objects confirmed |
 | G99 | 旧表删除/替代台账 | 0 | 22 removed objects confirmed |
 
 首版 `CREATE.sql` 的冻结表数：
 
 ```text
-21 + 11 + 3 + 5 + 8 + 3 + 7 + 11 + 5 + 5 + 3 = 82
+21 + 11 + 3 + 7 + 8 + 3 + 7 + 11 + 5 + 5 + 3 = 84
 ```
+
+不可变 `0001` 基线仍为 82 张表；当前完整 migration set 在执行 `0003_add_versioned_system_configuration.sql` 后为 84 张业务表。历史基线数字不用于覆盖当前 Schema 数字。
 
 ## 2. 本次统一确认时修正的矛盾
 
@@ -69,9 +71,9 @@ Company 没有 active Work Mode 时允许退化为 Company → Position。`posit
 
 ```text
 schema files executed:                11
-actual initial tables:                82
-inventory initial tables:             82
-explicit indexes:                     117
+actual current tables:                84
+inventory current tables:             84
+explicit indexes:                     118
 inventory tables missing from schema: 0
 schema tables missing from inventory: 0
 foreign-key parent-key errors:         0
@@ -79,15 +81,15 @@ DML prepare foreign-key mismatches:    0
 PRAGMA foreign_key_check violations:   0
 ```
 
-额外审计方法：对每一个 FK 检查 parent table 是否存在、被引用字段是否为主键或唯一键；并对 82 张表分别准备 `EXPLAIN DELETE`，捕捉空库 `foreign_key_check` 可能无法暴露的 SQLite `foreign key mismatch`。
+额外审计方法：对每一个 FK 检查 parent table 是否存在、被引用字段是否为主键或唯一键；并对 84 张表分别准备 `EXPLAIN DELETE`，捕捉空库 `foreign_key_check` 可能无法暴露的 SQLite `foreign key mismatch`。
 
 ## 5. Inventory 最终状态
 
 ```text
-confirmed initial: 82
-deferred:          11
+confirmed current: 84
+deferred:          10
 removed:           22
-total inventory:  115
+total inventory:  116
 ```
 
 Inventory 中已经没有 `draft` 或 `proposed` 表。
