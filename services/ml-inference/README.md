@@ -9,4 +9,12 @@ as a future optimization and is not silently introduced here.
 
 Required secret: `ML_SERVICE_AUTH_TOKEN` (minimum 32 characters).
 
-Recommended immutable deployment variable: `MODEL_REVISION`.
+The reviewed model revision is pinned to
+`c9745ed1d9f207416be6d2e6f8de32d1f16199bf`. The Docker build downloads that
+exact revision into the image and runtime network downloads are disabled. The
+service rejects a different `MODEL_REVISION` instead of silently changing ML
+behavior.
+
+The pinned revision changes model delivery only. The frozen v1 behavior still
+sends the complete Resume text and complete Position JD to the model and uses
+normalized embeddings with cosine similarity.

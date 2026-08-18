@@ -58,6 +58,16 @@ Within Workflow A, a retry of Resume extraction or Dedup removes only the same i
 - `GET /health`: liveness.
 - `POST /internal/dispatch`: authenticated manual Outbox drain; cron also drains pending events.
 
+### ML Inference
+
+- `GET /health`: public non-sensitive liveness only; Cloud Run IAM can still
+  keep the entire service private at the platform boundary.
+- `GET /ready`: authenticated readiness that loads the reviewed model.
+- `POST /v1/similarity`: authenticated Resume-to-JD cosine similarity.
+- The image pins Hugging Face revision
+  `c9745ed1d9f207416be6d2e6f8de32d1f16199bf`, downloads it at build time and
+  runs with Hugging Face/Transformers offline mode enabled.
+
 ### Operations API (Cloudflare Access JWT required)
 
 - Catalog company, company-work-mode, position and revision endpoints.

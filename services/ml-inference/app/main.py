@@ -17,6 +17,7 @@ SERVICE_NAME = "hirebeat-ml-inference"
 SERVICE_VERSION = "1.0.0"
 MODEL_NAME = "all-MiniLM-L6-v2"
 MODEL_PROVIDER = "sentence_transformers"
+PINNED_MODEL_REVISION = "c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
 
 
 class SimilarityRequest(BaseModel):
@@ -47,7 +48,9 @@ def _authorize(authorization: str | None) -> None:
 
 @lru_cache(maxsize=1)
 def _model() -> SentenceTransformer:
-    revision = os.getenv("MODEL_REVISION") or None
+    revision = os.getenv("MODEL_REVISION", PINNED_MODEL_REVISION)
+    if revision != PINNED_MODEL_REVISION:
+        raise RuntimeError("unsupported_model_revision")
     return SentenceTransformer(
         f"sentence-transformers/{MODEL_NAME}",
         revision=revision,
@@ -70,7 +73,11 @@ def health() -> dict[str, str]:
 def ready(authorization: str | None = Header(default=None)) -> dict[str, str]:
     _authorize(authorization)
     _model()
-    return {"status": "ready", "model_name": MODEL_NAME}
+    return {
+        "status": "ready",
+        "model_name": MODEL_NAME,
+        "model_revision": PINNED_MODEL_REVISION,
+    }
 
 
 @app.post("/v1/similarity", response_model=SimilarityResponse)
@@ -90,7 +97,7 @@ def similarity(
         similarity_metric="cosine_similarity",
         model_name=MODEL_NAME,
         model_provider=MODEL_PROVIDER,
-        model_revision=os.getenv("MODEL_REVISION") or None,
+        model_revision=PINNED_MODEL_REVISION,
         resume_text_sha256=_sha256(request.resume_text),
         position_jd_sha256=_sha256(request.position_jd),
     )
