@@ -41,4 +41,3 @@ await createSuccess();
 await duplicateCreateIsConfirmed();
 await unknownInstancePreservesCreateError();
 console.log("Outbox Workflow instance idempotency tests passed.");
-

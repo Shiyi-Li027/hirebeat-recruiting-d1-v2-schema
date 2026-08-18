@@ -11,6 +11,7 @@ service-account*.json
 .DS_Store
 .Rhistory
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *.sqlite
 *.sqlite3
