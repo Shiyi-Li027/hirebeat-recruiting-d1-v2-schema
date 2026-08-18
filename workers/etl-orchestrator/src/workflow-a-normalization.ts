@@ -16,6 +16,7 @@ interface RawInputRow {
   resume_text: string | null;
   company_active: number | null;
   position_status: string | null;
+  position_jd: string | null;
   position_company_id: number | null;
   work_mode_valid: number;
   active_work_mode_count: number;
@@ -40,7 +41,8 @@ async function rawInput(db: D1Database, rawSubmissionId: number): Promise<RawInp
             raw.raw_start_working_date, raw.raw_end_working_date,
             raw.raw_work_duration, resume.resume_text_status, resume.resume_text,
             company.is_active AS company_active,
-            position.position_status, position.company_id AS position_company_id,
+            position.position_status, position.position_jd,
+            position.company_id AS position_company_id,
             CASE WHEN raw.submitted_company_work_mode_id IS NULL THEN 0
                  WHEN company_mode.id IS NOT NULL AND company_mode.is_active=1 THEN 1
                  ELSE 0 END AS work_mode_valid,
@@ -73,6 +75,8 @@ export async function initialCleaning(
     reason = "submitted_company_missing_or_inactive";
   else if (!row.submitted_position_id || row.position_status !== "active" || row.position_company_id !== row.submitted_company_id)
     reason = "submitted_position_missing_inactive_or_wrong_company";
+  else if (!row.position_jd || row.position_jd.trim().length < 10)
+    reason = "submitted_position_jd_not_ready";
   else if (row.submitted_company_work_mode_id !== null && row.work_mode_valid !== 1)
     reason = "submitted_company_work_mode_invalid_or_inactive";
   else if (row.submitted_company_work_mode_id === null && row.active_work_mode_count > 0)

@@ -52,6 +52,8 @@ Real values must be stored through Cloudflare Secrets and must never be committe
 - `INGRESS_INTERNAL_AUTH_TOKEN`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`
 - `PARSER_SERVICE_AUTH_TOKEN`
+- `CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON` (dedicated least-privilege Cloud
+  Run caller; do not reuse the Google Drive reader identity)
 
 For local development only, copy `.dev.vars.example` to `.dev.vars` and replace the placeholders. The real `.dev.vars` file is ignored by Git.
 

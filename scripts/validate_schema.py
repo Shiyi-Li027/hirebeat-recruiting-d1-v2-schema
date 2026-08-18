@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import sqlite3
 from pathlib import Path
@@ -16,8 +17,20 @@ BASELINE_MIGRATION_SHA256 = (
     "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
 )
 CONFIG = ROOT / "wrangler.toml"
+STATUS_POLICY = ROOT / "schema/status_field_policy.csv"
 EXPECTED_TABLE_COUNT = 84
 EXPECTED_INDEX_COUNT = 120
+ALLOWED_TRIGGER_NAMES = {
+    "trg_position_active_requires_jd_insert",
+    "trg_position_active_requires_jd_update",
+}
+ALLOWED_STATUS_STRATEGIES = {
+    "default_active",
+    "schema_default",
+    "conditional_importer_default",
+    "explicit_required",
+    "nullable_transition_origin",
+}
 EXPECTED_SYSTEM_CONFIGURATION = {
     ("ml_inference", "request_timeout_ms"): "30000",
     ("outbox", "max_delivery_attempts"): "8",
@@ -27,6 +40,43 @@ EXPECTED_SYSTEM_CONFIGURATION = {
     ("submission_ingress", "parser_timeout_ms"): "30000",
     ("workflow", "default_step_max_attempts"): "5",
 }
+
+
+def normalize_default(value: str | None) -> str:
+    """Normalize SQLite PRAGMA defaults for comparison with the policy CSV."""
+    if value is None:
+        return ""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def load_status_policy() -> dict[tuple[str, str], dict[str, str]]:
+    if not STATUS_POLICY.is_file():
+        raise SystemExit(
+            "Schema validation failed: schema/status_field_policy.csv is missing."
+        )
+    with STATUS_POLICY.open(newline="", encoding="utf-8-sig") as handle:
+        rows = list(csv.DictReader(handle))
+    policies: dict[tuple[str, str], dict[str, str]] = {}
+    for row in rows:
+        key = (row["table_name"], row["column_name"])
+        if key in policies:
+            raise SystemExit(
+                f"Schema validation failed: duplicate status policy for {key}."
+            )
+        if row["strategy"] not in ALLOWED_STATUS_STRATEGIES:
+            raise SystemExit(
+                "Schema validation failed: unsupported status strategy "
+                f"{row['strategy']!r} for {key}."
+            )
+        if not row["policy_description"].strip():
+            raise SystemExit(
+                f"Schema validation failed: status policy {key} has no description."
+            )
+        policies[key] = row
+    return policies
 
 
 def validate(check_config: bool) -> None:
@@ -104,6 +154,37 @@ def validate(check_config: bool) -> None:
             row[1]: row[3]
             for row in connection.execute("PRAGMA table_info(etl_workflow_run)")
         }
+        actual_status_columns: dict[tuple[str, str], tuple[int, str]] = {}
+        table_names = [
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+                """
+            )
+        ]
+        for table_name in table_names:
+            escaped_table = table_name.replace('"', '""')
+            for column in connection.execute(
+                f'PRAGMA table_info("{escaped_table}")'
+            ):
+                column_name = column[1]
+                if (
+                    column_name == "is_active"
+                    or column_name == "status"
+                    or column_name.endswith("_status")
+                ):
+                    actual_status_columns[(table_name, column_name)] = (
+                        column[3],
+                        normalize_default(column[4]),
+                    )
+        trigger_names = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            )
+        }
     finally:
         connection.close()
 
@@ -150,6 +231,51 @@ def validate(check_config: bool) -> None:
             "configuration_release_id must remain nullable for history."
         )
 
+    policies = load_status_policy()
+    actual_keys = set(actual_status_columns)
+    policy_keys = set(policies)
+    missing_policies = sorted(actual_keys - policy_keys)
+    stale_policies = sorted(policy_keys - actual_keys)
+    if missing_policies or stale_policies:
+        raise SystemExit(
+            "Schema validation failed: every *_status/is_active field must have "
+            "exactly one explicit policy. "
+            f"Missing={missing_policies}; stale={stale_policies}."
+        )
+    for key, row in policies.items():
+        actual_not_null, actual_default = actual_status_columns[key]
+        if actual_not_null != int(row["expected_not_null"]):
+            raise SystemExit(
+                f"Schema validation failed: {key} NOT NULL differs from policy."
+            )
+        if actual_default != row["expected_default"]:
+            raise SystemExit(
+                f"Schema validation failed: {key} default {actual_default!r} "
+                f"differs from policy {row['expected_default']!r}."
+            )
+        if row["strategy"] == "default_active" and (
+            actual_not_null != 1 or actual_default != "1"
+        ):
+            raise SystemExit(
+                f"Schema validation failed: {key} must remain NOT NULL DEFAULT 1."
+            )
+        if row["strategy"] == "explicit_required" and (
+            actual_not_null != 1 or actual_default
+        ):
+            raise SystemExit(
+                f"Schema validation failed: {key} must remain required without "
+                "a guessed schema default."
+            )
+
+    unexpected_triggers = sorted(trigger_names - ALLOWED_TRIGGER_NAMES)
+    missing_triggers = sorted(ALLOWED_TRIGGER_NAMES - trigger_names)
+    if unexpected_triggers or missing_triggers:
+        raise SystemExit(
+            "Schema validation failed: triggers are restricted to reviewed "
+            "cross-column invariants. "
+            f"Unexpected={unexpected_triggers}; missing={missing_triggers}."
+        )
+
     if check_config:
         config_text = CONFIG.read_text(encoding="utf-8")
         if "REPLACE_WITH_" in config_text:
@@ -161,7 +287,8 @@ def validate(check_config: bool) -> None:
     print(
         "Schema validation succeeded: "
         f"{len(migration_paths)} migrations, {table_count} tables, "
-        f"{index_count} explicit indexes, 0 FK violations."
+        f"{index_count} explicit indexes, {len(policies)} status policies, "
+        f"{len(trigger_names)} reviewed cross-column triggers, 0 FK violations."
     )
 
 

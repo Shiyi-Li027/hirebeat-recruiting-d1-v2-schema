@@ -107,7 +107,8 @@ export class OutboxDispatcher {
       return;
     }
     if (
-      (row.event_type === "application.core_published" || row.event_type === "application.ml_requested") &&
+      (row.event_type === "application.core_published" || row.event_type === "application.ml_requested" ||
+       row.event_type === "application.position_jd_ready") &&
       row.destination_key === "workflow_b"
     ) {
       const applicationId = Number(payload.applicationId);

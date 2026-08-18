@@ -39,7 +39,8 @@
 - `D04=A`：D1 管理 API 是 Catalog 权威写入口，允许受控 CSV backfill。
 - `D07=A`：先继续使用现有 Render PyMuPDF Parser，并补齐认证与版本契约。
 - `D08=A`：Education 为零行仍允许继续，不创建 placeholder。
-- `D09=A`：Position JD 缢失或过短时 anomaly exclusion，直接 `no_offer`。
+- `D09=A`（已由后续确认修订）：Position JD 缺失或过短时进入
+  `waiting_position_jd`，不调用 ML、不生成 `no_offer`；JD ready 后由 Outbox 重启。
 - `D10=A`：使用独立 Python FastAPI `all-MiniLM-L6-v2` 推理服务。
 - `D11=A`：全局默认 threshold 使用 `standard = 0.32`。
 - `D12=A+`：内部 command API 使用 Cloudflare Access 的成员独立身份；所有获准
@@ -181,15 +182,20 @@ Reference/Catalog importer 和实时 Submission Ingress 逐条重新导入。旧
 必须把 Education 零行当作合法空集合。只有已有 anomaly 规则命中近乎空档案，或其他
 独立必需输入缺失时，才按对应规则排除。
 
-## D09. Active Position 没有 JD 时，ML 如何决定
+## D09. Position JD 在 ML 前变为不可用时如何处理
 
-Position JD 已确认允许 NULL，但 cosine similarity 没有 JD 时没有业务含义。
+Position JD 在非 Active 状态允许 NULL；Active 状态由 Schema/API 强制要求有效 JD。
+如果 Application 发布后因并发或后续 Catalog 变更导致 Workflow B 读取不到有效 JD，
+cosine similarity 仍然没有业务含义。
 
 ### 推荐选择：A
 
-**A. 明确 anomaly exclusion → no_offer（推荐）**
+**A. 等待 JD 并通过 Outbox 安全重启（已确认）**
 
-增加 `position_jd_missing_or_too_short`，保留完整审计，不制造伪 similarity score。
+Position JD 缺失或不足 10 字符时不调用 ML、不制造伪 similarity score，也不生成
+`no_offer`。Application 保持 `processing/pending`，数据库 Workflow B 标记为
+`waiting_position_jd`；JD 后续补齐并使 Position active 时，通过带新 decision fence 的
+`application.position_jd_ready` Outbox event 安全启动新的 Workflow B。
 
 **B. 使用空字符串继续 embedding**
 

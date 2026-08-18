@@ -1,3 +1,5 @@
+import { GoogleServiceAccountCloudRunIdTokenProvider } from "../../shared/google-cloud-run-id-token";
+
 export interface SimilarityResponse {
   match_score: number;
   similarity_metric: "cosine_similarity";
@@ -8,16 +10,41 @@ export interface SimilarityResponse {
   position_jd_sha256: string;
 }
 
+let cachedCredential = "";
+let cachedIdTokenProvider: GoogleServiceAccountCloudRunIdTokenProvider | null = null;
+
+function idTokenProvider(
+  serviceAccountJson: string,
+): GoogleServiceAccountCloudRunIdTokenProvider {
+  if (!cachedIdTokenProvider || cachedCredential !== serviceAccountJson) {
+    cachedCredential = serviceAccountJson;
+    cachedIdTokenProvider = new GoogleServiceAccountCloudRunIdTokenProvider(
+      serviceAccountJson,
+      10_000,
+    );
+  }
+  return cachedIdTokenProvider;
+}
+
 export async function calculateSimilarity(
-  serviceUrl:string,authToken:string,resumeText:string,positionJd:string,timeoutMs=30_000,
+  serviceUrl:string,authToken:string,cloudRunInvokerServiceAccountJson:string,
+  resumeText:string,positionJd:string,timeoutMs=30_000,
 ):Promise<SimilarityResponse>{
-  if(!serviceUrl||!authToken)throw new Error("ml_service_not_configured");
+  if(!serviceUrl||!authToken||!cloudRunInvokerServiceAccountJson)throw new Error("ml_service_not_configured");
+  const audience=new URL(serviceUrl).origin;
+  const cloudRunIdToken=await idTokenProvider(
+    cloudRunInvokerServiceAccountJson,
+  ).getIdToken(audience);
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort("ml_service_timeout"),timeoutMs);
   try{
     const response=await fetch(`${serviceUrl.replace(/\/$/,"")}/v1/similarity`,{
       method:"POST",
-      headers:{"content-type":"application/json",authorization:`Bearer ${authToken}`},
+      headers:{
+        "content-type":"application/json",
+        authorization:`Bearer ${authToken}`,
+        "x-serverless-authorization":`Bearer ${cloudRunIdToken}`,
+      },
       body:JSON.stringify({resume_text:resumeText,position_jd:positionJd}),
       signal:controller.signal,
     });

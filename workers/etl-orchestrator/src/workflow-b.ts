@@ -8,8 +8,8 @@ import { finalizeMlDecision, type FinalDecisionResult } from "./workflow-b-final
 import { loadOrchestratorConfiguration } from "./runtime-configuration";
 
 export interface WorkflowBOutcome {
-  status:"offer_created"|"rejected";
-  recommendationResultId:number;
+  status:"offer_created"|"rejected"|"waiting_position_jd";
+  recommendationResultId:number|null;
   offerId:number|null;
 }
 
@@ -42,6 +42,35 @@ export async function executeWorkflowB(
         return{valid:true};
       },
     ));
+    const positionJdReady=await doConfigured("verify-position-jd-ready",()=>tracked(
+      ledger,run.id,"verify_position_jd_ready","Verify Position JD is ready for ML",async()=>{
+        const row=await env.DB.prepare(
+          `SELECT position.position_jd FROM application
+           JOIN position ON position.id=application.position_id
+           WHERE application.id=?1 AND application.current_candidate_snapshot_id=?2
+             AND application.decision_fence_token=?3
+             AND application.application_lifecycle_status='processing'
+             AND application.application_decision_status='pending'`,
+        ).bind(payload.applicationId,payload.candidateSnapshotId,payload.decisionFenceToken)
+          .first<{position_jd:string|null}>();
+        return Boolean(row?.position_jd&&row.position_jd.trim().length>=10);
+      },
+    ));
+    if(!positionJdReady){
+      const now=new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO audit_event (
+           event_uuid,event_type,entity_type,entity_id,actor_type,actor_id,
+           workflow_run_id,correlation_key,reason_code,event_summary,
+           event_metadata_json,occurred_at,recorded_at
+         ) VALUES (?1,'workflow_b.waiting_position_jd','application',?2,'workflow',?3,
+                   ?3,?4,'position_jd_not_ready',
+                   'Workflow B is waiting for Position JD','{}',?5,?5)`,
+      ).bind(crypto.randomUUID(),payload.applicationId,String(run.id),
+        `workflow-b:${run.id}:waiting-position-jd`,now).run();
+      await ledger.waitWorkflow(run.id,"waiting_position_jd");
+      return{status:"waiting_position_jd",recommendationResultId:null,offerId:null};
+    }
     await doConfigured("publish-candidate-enrichment",()=>tracked<EnrichmentResult>(
       ledger,run.id,"publish_candidate_enrichment","Publish Candidate enrichment",()=>publishCandidateEnrichment(
         env.DB,payload.applicationId,payload.candidateSnapshotId,payload.decisionFenceToken,

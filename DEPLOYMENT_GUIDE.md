@@ -348,11 +348,13 @@ npx wrangler d1 execute DB --remote --command \
 npx wrangler secret put SUBMISSION_HMAC_KEY_V1 --config workers/submission-ingress/wrangler.toml
 npx wrangler secret put INGRESS_INTERNAL_AUTH_TOKEN --config workers/submission-ingress/wrangler.toml
 npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON --config workers/submission-ingress/wrangler.toml
+npx wrangler secret put CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON --config workers/submission-ingress/wrangler.toml
 npx wrangler secret put PARSER_SERVICE_AUTH_TOKEN --config workers/submission-ingress/wrangler.toml
 
 npx wrangler secret put IDENTITY_HMAC_KEY_V1 --config workers/etl-orchestrator/wrangler.toml
 npx wrangler secret put ORCHESTRATOR_INTERNAL_AUTH_TOKEN --config workers/etl-orchestrator/wrangler.toml
 npx wrangler secret put ML_SERVICE_AUTH_TOKEN --config workers/etl-orchestrator/wrangler.toml
+npx wrangler secret put CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON --config workers/etl-orchestrator/wrangler.toml
 ```
 
 如果 Worker 尚不存在，先在 staging 使用关闭的 public route 完成一次 bootstrap deploy，再写 Secrets，然后再次 deploy。三个 Worker 的公开路由必须保持关闭或受 Access/内部网络认证保护。
@@ -365,7 +367,7 @@ npm run operations:deploy:staging
 
 Operations API 必须先建立 Cloudflare Access Self-hosted application。为项目成员建立团队 group，并让 Allow policy 只包含该 group；项目成员可以拥有 Author 权限，但 Operations API 仍以 Access JWT 记录每个操作者的 email/sub。不要共享一个人员 Token 来替代成员身份。
 
-Parser 与 ML 是容器服务，不由 Wrangler Worker 命令部署。它们必须使用私有 URL，并分别配置与 Worker 相同的 `PARSER_SERVICE_AUTH_TOKEN`、`ML_SERVICE_AUTH_TOKEN`。上线前分别调用 authenticated `/ready`。完整运行边界见 `15_production_implementation_runbook.md`。
+Parser 与 ML 是容器服务，不由 Wrangler Worker 命令部署。它们必须使用私有 URL，并分别配置与 Worker 相同的 `PARSER_SERVICE_AUTH_TOKEN`、`ML_SERVICE_AUTH_TOKEN`。Ingress 与 Orchestrator 还必须配置同一个专用、最小权限的 `CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON`，用于换取 audience-bound Google ID Token；该身份只获得两个目标服务的 `roles/run.invoker`。上线前分别调用 authenticated `/ready`。完整运行边界见 `15_production_implementation_runbook.md`。
 
 ## 12. 以后修改 schema 的正确方式
 

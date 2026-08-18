@@ -18,4 +18,11 @@ bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
 DEPLOYMENT_STAGE = "staging"
 SOURCE_SCHEMA_VERSION = "canonical-intake-v1"
 SUBMISSION_UUID_NAMESPACE = "676628aa-0c13-4b8f-9dc1-3d675f7487a2"
-PARSER_SERVICE_URL = "REPLACE_WITH_PARSER_SERVICE_URL"
+PARSER_SERVICE_URL = "https://hirebeat-resume-parser-stg-340548608366.us-east1.run.app"
+
+# Set these with `wrangler secret put --config workers/submission-ingress/wrangler.toml`:
+# SUBMISSION_HMAC_KEY_V1
+# INGRESS_INTERNAL_AUTH_TOKEN
+# GOOGLE_SERVICE_ACCOUNT_JSON
+# CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON
+# PARSER_SERVICE_AUTH_TOKEN

@@ -9,6 +9,7 @@ on:
       - "services/**"
       - "scripts/**"
       - "migrations/**"
+      - "schema/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/validate-production-code.yml"
@@ -32,6 +33,15 @@ jobs:
       - run: npm ci
       - name: Validate schema and migrations
         run: python3 scripts/validate_schema.py --check-config
+      - name: Reject stale generated schema governance artifacts
+        run: |
+          npm run schema:build
+          git diff --exit-code -- \
+            schema/HIREBEAT_D1_CREATE_2026-08-17.sql \
+            schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql \
+            schema/HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.csv \
+            schema/HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.md \
+            schema/HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql
       - name: Compile Python services
         run: python3 -m compileall -q services scripts
       - name: Test authenticated PDF Parser contract

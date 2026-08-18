@@ -5,7 +5,7 @@ import type { OrchestratorEnv } from "./env";
 interface MlInput {
   application_id:number;candidate_snapshot_id:number;person_id:number;position_id:number;
   decision_fence_token:string;resume_text:string;resume_text_sha256:string;position_jd:string|null;
-  seniority_name:string|null;employment_count:number;education_count:number;skill_count:number;project_count:number;
+  employment_count:number;education_count:number;skill_count:number;project_count:number;
 }
 
 export interface MlRunResult {
@@ -24,7 +24,6 @@ async function input(db:D1Database,applicationId:number,candidateSnapshotId:numb
   const row=await db.prepare(
     `SELECT app.id application_id,candidate.id candidate_snapshot_id,candidate.person_id,app.position_id,
             app.decision_fence_token,resume.resume_text,resume.resume_text_sha256,position.position_jd,
-            seniority.seniority_name,
             (SELECT COUNT(*) FROM candidate_position cp WHERE cp.candidate_snapshot_id=candidate.id) employment_count,
             (SELECT COUNT(*) FROM candidate_education ce WHERE ce.candidate_snapshot_id=candidate.id) education_count,
             (SELECT COUNT(*) FROM candidate_skill cs WHERE cs.candidate_snapshot_id=candidate.id) skill_count,
@@ -34,7 +33,6 @@ async function input(db:D1Database,applicationId:number,candidateSnapshotId:numb
      JOIN resume_extraction extraction ON extraction.id=lineage.source_resume_extraction_id
      JOIN raw_submission_resume resume ON resume.id=extraction.raw_submission_resume_id
      JOIN position ON position.id=app.position_id
-     LEFT JOIN seniority ON seniority.id=position.seniority_id
      WHERE app.id=?1 AND app.decision_fence_token=?3 AND app.application_lifecycle_status='processing'
        AND app.application_decision_status='pending' AND candidate.snapshot_status='enriched'`,
   ).bind(applicationId,candidateSnapshotId,fence).first<MlInput>();
@@ -48,6 +46,7 @@ export async function executeMl(
 ):Promise<MlRunResult>{
   const source=await input(env.DB,applicationId,candidateSnapshotId,fence);
   const positionJd=source.position_jd?.trim()??"";
+  if(positionJd.length<10)throw new Error("position_jd_not_ready");
   const inputSnapshot=await sha256(JSON.stringify({
     candidateSnapshotId,
     decisionFenceToken:fence,
@@ -70,10 +69,10 @@ export async function executeMl(
   const run=await env.DB.prepare(`SELECT id,run_status FROM ml_analysis_run WHERE application_id=?1 AND input_snapshot_sha256=?2`)
     .bind(applicationId,inputSnapshot).first<{id:number;run_status:string}>();
   if(!run)throw new Error("ml_analysis_run_create_failed");
-  const almostEmpty=source.employment_count===0&&source.education_count===0&&source.skill_count===0&&source.project_count===0;
-  const senior=(source.seniority_name??"").toLowerCase();
-  const seniorWithoutEmployment=/(senior|lead|principal|manager|director|executive)/.test(senior)&&source.employment_count===0;
-  const anomalyFlags={candidate_profile_almost_empty:almostEmpty,senior_role_without_employment:seniorWithoutEmployment,position_jd_missing_or_too_short:positionJd.length<10};
+  // Frozen v1 ML input is the full Resume text plus Position JD. Empty
+  // Education/Employment/Skill/Project child sets are valid and must not
+  // independently reject an Application.
+  const anomalyFlags={position_jd_missing_or_too_short:false};
   const hasAnomaly=Object.values(anomalyFlags).some(Boolean);
   await env.DB.prepare(
     `INSERT OR IGNORE INTO ml_anomaly_result (ml_analysis_run_id,application_id,candidate_snapshot_id,
@@ -86,7 +85,14 @@ export async function executeMl(
     await env.DB.prepare(`UPDATE ml_analysis_run SET run_status='succeeded',completed_at=?2,updated_at=?2 WHERE id=?1`).bind(run.id,now).run();
     return{mlAnalysisRunId:run.id,anomalyResultId:anomaly.id,similarityResultId:null,thresholdPolicyId:null,matchScore:null,threshold:null,recommendation:"no_offer",method:"anomaly_exclusion",reasonCode:"anomaly_excluded"};
   }
-  const similarity=await calculateSimilarity(env.ML_SERVICE_URL,env.ML_SERVICE_AUTH_TOKEN,source.resume_text,positionJd,requestTimeoutMs);
+  const similarity=await calculateSimilarity(
+    env.ML_SERVICE_URL,
+    env.ML_SERVICE_AUTH_TOKEN,
+    env.CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON,
+    source.resume_text,
+    positionJd,
+    requestTimeoutMs,
+  );
   if(similarity.resume_text_sha256!==source.resume_text_sha256||similarity.position_jd_sha256!==jdSha)throw new Error("ml_service_input_hash_mismatch");
   await env.DB.prepare(
     `INSERT OR IGNORE INTO ml_similarity_result (ml_analysis_run_id,application_id,candidate_snapshot_id,position_id,

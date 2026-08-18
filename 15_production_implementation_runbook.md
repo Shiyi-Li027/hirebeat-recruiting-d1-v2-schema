@@ -70,6 +70,18 @@ Within Workflow A, a retry of Resume extraction or Dedup removes only the same i
 
 ### Operations API (Cloudflare Access JWT required)
 
+Reference and Catalog authoring endpoints include:
+
+- `GET /v1/reference/types` and `POST /v1/reference/{type}` for every G01 Reference importer;
+- `PATCH /v1/reference/{type}/{id}/active-state` for controlled Reference activation/deactivation;
+- `GET /v1/catalog/child-types` and `POST /v1/catalog/children/{type}` for the remaining G02 child tables;
+- `PATCH /v1/catalog/children/{type}/{id}/active-state` for G02 child state changes;
+- records with `is_active` default to active unless an authoring command explicitly supplies `false` or `0`;
+- Position defaults to `active` only when its JD passes the 10-character readiness gate; otherwise it defaults to `draft`.
+- A later Position update that supplies a ready JD requeues every matching
+  `waiting_position_jd` Application through an idempotent Outbox event and a
+  newly rotated decision fence.
+
 - Catalog company, company-work-mode, position and revision endpoints.
 - `POST /v1/applications/{id}/ml-recommendation`: rotate fence and request a fresh Workflow B run.
 - `POST /v1/offers/{id}/versions`: append one immutable Offer terms version.
@@ -93,13 +105,22 @@ Place environment-specific URLs and Access identifiers in the deployment environ
 
 | Runtime | Secret |
 |---|---|
-| Ingress | `SUBMISSION_HMAC_KEY_V1`, `INGRESS_INTERNAL_AUTH_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `PARSER_SERVICE_AUTH_TOKEN` |
-| Orchestrator | `IDENTITY_HMAC_KEY_V1`, `ORCHESTRATOR_INTERNAL_AUTH_TOKEN`, `ML_SERVICE_AUTH_TOKEN` |
+| Ingress | `SUBMISSION_HMAC_KEY_V1`, `INGRESS_INTERNAL_AUTH_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON`, `PARSER_SERVICE_AUTH_TOKEN` |
+| Orchestrator | `IDENTITY_HMAC_KEY_V1`, `ORCHESTRATOR_INTERNAL_AUTH_TOKEN`, `CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON`, `ML_SERVICE_AUTH_TOKEN` |
 | Resume Parser | `PARSER_SERVICE_AUTH_TOKEN` |
 | ML service | `ML_SERVICE_AUTH_TOKEN` |
 | GitHub migration environment | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
 
 `AIRTABLE_API_TOKEN` is needed only if a future adapter calls Airtable's API directly. Attachment URLs supplied by a trusted Automation do not automatically require it.
+
+`CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON` belongs to a dedicated least-privilege
+Google service account that has `roles/run.invoker` only on the private Parser
+and ML services. Workers exchange its signed assertion for a short-lived,
+audience-bound Google ID token and send that token in
+`X-Serverless-Authorization`; the independent Parser/ML application token stays
+in `Authorization`. Do not reuse the Google Drive reader identity for this role.
+Migrate away from a downloaded key to Workload Identity Federation if a
+supported Cloudflare workload identity becomes available.
 
 ## 6. Release gates
 

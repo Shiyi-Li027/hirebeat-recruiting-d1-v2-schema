@@ -7,8 +7,10 @@ on:
       - main
     paths:
       - "migrations/**"
+      - "schema/status_field_policy.csv"
       - "wrangler.toml"
       - "scripts/validate_schema.py"
+      - "scripts/generate_constraint_matrix.py"
       - ".github/workflows/deploy-d1.yml"
 
 permissions:

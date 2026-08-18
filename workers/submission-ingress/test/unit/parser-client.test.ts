@@ -16,12 +16,20 @@ const pdf: ResolvedResumePdf = {
   sizeBytes: 9,
 };
 
+const cloudRunIdTokenProvider = {
+  async getIdToken(audience: string): Promise<string> {
+    assert.equal(audience, "https://parser.example.test");
+    return "google-id-token";
+  },
+};
+
 test("Parser preserves whitespace and appends parse-pdf endpoint", async () => {
   let requestedUrl = "";
   const originalText = "EDUCATION\n  New York University\n\nEXPERIENCE\nRole  ";
   const client = new HttpParserClient(
     "https://parser.example.test/api",
     "test-token",
+    cloudRunIdTokenProvider,
     1_000,
     async (input, init) => {
       requestedUrl = String(input);
@@ -29,6 +37,10 @@ test("Parser preserves whitespace and appends parse-pdf endpoint", async () => {
       assert.equal(
         new Headers(init?.headers).get("authorization"),
         "Bearer test-token",
+      );
+      assert.equal(
+        new Headers(init?.headers).get("x-serverless-authorization"),
+        "Bearer google-id-token",
       );
       assert.ok(init?.body instanceof FormData);
       return Response.json({
@@ -50,6 +62,7 @@ test("Parser 429 is retryable", async () => {
   const client = new HttpParserClient(
     "https://parser.example.test/parse-pdf",
     "test-token",
+    cloudRunIdTokenProvider,
     1_000,
     async () => new Response(null, { status: 429 }),
   );
@@ -66,6 +79,7 @@ test("Parser empty text is terminal", async () => {
   const client = new HttpParserClient(
     "https://parser.example.test/parse-pdf",
     "test-token",
+    cloudRunIdTokenProvider,
     1_000,
     async () => Response.json({ text: "   " }),
   );

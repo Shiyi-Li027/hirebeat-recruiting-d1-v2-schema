@@ -147,6 +147,15 @@ export class WorkflowLedger {
     ).bind(workflowRunId, now).run();
   }
 
+  async waitWorkflow(workflowRunId:number,reasonCode:string):Promise<void>{
+    const now=new Date().toISOString();
+    await this.db.prepare(
+      `UPDATE etl_workflow_run SET workflow_status='waiting',current_step_key=?2,
+       last_error_code=?2,last_error_detail=?2,completed_at=NULL,
+       last_progressed_at=?3,updated_at=?3 WHERE id=?1`,
+    ).bind(workflowRunId,reasonCode,now).run();
+  }
+
   async failWorkflow(workflowRunId: number, error: unknown): Promise<void> {
     const now = new Date().toISOString();
     const code = safeErrorCode(error);

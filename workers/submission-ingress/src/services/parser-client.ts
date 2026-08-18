@@ -1,6 +1,7 @@
 import type { ResolvedResumePdf } from "./resume-resolver";
 import { IngressError } from "../errors/ingress-error";
 import type { FetchFunction } from "./pdf-download";
+import type { CloudRunIdTokenProvider } from "../../../shared/google-cloud-run-id-token";
 
 export interface ParsedResumeText {
   text: string;
@@ -48,10 +49,25 @@ function parserEndpoint(baseUrl: string): string {
   return url.toString();
 }
 
+function parserAudience(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).origin;
+  } catch (cause) {
+    throw new IngressError({
+      kind: "configuration",
+      safeCode: "invalid_parser_service_url",
+      message: "The Parser service URL is invalid.",
+      httpStatus: 503,
+      cause,
+    });
+  }
+}
+
 export class HttpParserClient implements ParserClient {
   constructor(
     private readonly serviceUrl: string,
     private readonly authToken: string,
+    private readonly cloudRunIdTokenProvider: CloudRunIdTokenProvider,
     private readonly timeoutMs: number,
     private readonly fetchFunction: FetchFunction = fetch,
   ) {}
@@ -83,9 +99,15 @@ export class HttpParserClient implements ParserClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
+      const cloudRunIdToken = await this.cloudRunIdTokenProvider.getIdToken(
+        parserAudience(this.serviceUrl),
+      );
       const response = await this.fetchFunction(parserEndpoint(this.serviceUrl), {
         method: "POST",
-        headers: { authorization: `Bearer ${this.authToken}` },
+        headers: {
+          authorization: `Bearer ${this.authToken}`,
+          "x-serverless-authorization": `Bearer ${cloudRunIdToken}`,
+        },
         body: form,
         signal: controller.signal,
       });

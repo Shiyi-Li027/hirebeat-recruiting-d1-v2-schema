@@ -22,7 +22,7 @@ Current verified baseline:
 | Local foreign-key violations | 0 |
 | Local migration | Passed |
 
-The immutable initial migration creates the original schema objects only. Migrations `0002` through `0009` add R2 file-integrity support, versioned non-secret runtime configuration, reference and hiring-stage seeds, the global ML threshold policy, minimum runtime reference rows, command idempotency, and single-promotion protection from normalized Submission to Application. Deployed migrations are immutable; every later schema or seed change must use a new numbered migration.
+The immutable initial migration creates the original schema objects only. Migrations `0002` through `0010` add R2 file-integrity support, versioned non-secret runtime configuration, reference and hiring-stage seeds, the global ML threshold policy, minimum runtime reference rows, command idempotency, single-promotion protection from normalized Submission to Application, and the Active-Position JD invariant. Deployed migrations are immutable; every later schema or seed change must use a new numbered migration.
 
 ## Architecture / 架构
 
@@ -102,6 +102,12 @@ Responsibility boundary:
 
 Detailed group responsibilities and decisions are documented in [`00_master_table_groups.md`](00_master_table_groups.md). The table-level inventory is available in [`00_master_table_inventory.csv`](00_master_table_inventory.csv).
 
+The protected Operations API now provides whitelist-based production importers
+for all 21 G01 Reference types and all six writable G02 Catalog child types.
+Rows that contain `is_active` default to active unless the authoring request
+explicitly supplies `false` or `0`. A Position with a ready JD defaults to
+`active`; a Position without a ready JD defaults to `draft`.
+
 ## Core design principles / 核心原则
 
 - All table and column names use `lower_snake_case`.
@@ -111,8 +117,11 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 - Short D1 transactions provide database atomicity; workflow compensation handles cross-step business rollback.
 - Raw source evidence, workflow state, technical errors, and audit history are not silently overwritten.
 - Optional child entities are represented by zero rows or `NULL`, never fake `unknown` or placeholder entities.
+- Zero Education, Employment, Skill or Project rows do not independently reject
+  an Application in ML v1; the frozen similarity input remains full Resume text
+  plus Position JD.
 - Shared entities such as Company, Position, Skill, School, and Person are not deleted by a failed application workflow.
-- SQL triggers are not used in the initial version; reliable asynchronous handoffs use the Outbox pattern.
+- Reliable asynchronous handoffs use the Outbox pattern. SQL triggers are not used for workflow orchestration; the narrow Position trigger only protects the local invariant that an Active Position must have a usable JD.
 - Destructive cleanup is never part of automatic migrations or GitHub Actions.
 
 ## Repository structure / 仓库结构
@@ -129,7 +138,8 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 │   ├── 0006_seed_global_ml_threshold_policy.sql
 │   ├── 0007_seed_minimum_runtime_reference_data.sql
 │   ├── 0008_enforce_command_idempotency.sql
-│   └── 0009_enforce_single_application_promotion.sql
+│   ├── 0009_enforce_single_application_promotion.sql
+│   └── 0010_require_jd_for_active_position.sql
 ├── workers/
 │   ├── submission-ingress/
 │   ├── etl-orchestrator/
@@ -141,9 +151,14 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 │   └── read-only inspection export contract
 ├── schema/
 │   ├── HIREBEAT_D1_CREATE_2026-08-17.sql
-│   └── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
+│   ├── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
+│   ├── HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.csv
+│   ├── HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.md
+│   ├── HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql
+│   └── status_field_policy.csv
 ├── scripts/
 │   ├── build_schema_artifacts.py
+│   ├── generate_constraint_matrix.py
 │   └── validate_schema.py
 ├── shared_reference/ through offer/
 │   └── confirmed group design and source SQL
@@ -157,6 +172,15 @@ Detailed group responsibilities and decisions are documented in [`00_master_tabl
 ```
 
 The canonical database deployment entry point is the ordered set of files in `migrations/`. The canonical runtime entry points are the three packages below `workers/`; the former root JavaScript Ingress prototype and its standalone Wrangler config were removed to prevent accidental deployment. The standalone CREATE file represents the latest complete schema for a fresh database and is therefore no longer byte-identical to `0001`. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
+
+The generated constraint/default matrix covers every column in all 84 current
+tables. `status_field_policy.csv` is the reviewed source of truth for every
+`status`, `*_status`, and `is_active` field. Validation fails if a new status field has no
+policy, a policy becomes stale, a protected default/nullability changes, or an
+unreviewed SQL Trigger appears. Manual SQL is an administrative exception and
+must begin from `HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql`; production writes
+should continue to use the protected importers so callers receive friendly
+field-specific validation errors.
 
 ## Prerequisites / 环境要求
 
@@ -187,6 +211,10 @@ Validate the initial migration in an in-memory SQLite database:
 npm run schema:validate
 ```
 
+`schema:build` also regenerates the 84-table constraint/default documentation
+and manual INSERT templates from the fully migrated schema. These generated
+files must be committed together with any migration or group-schema change.
+
 Validate the authenticated PDF Parser contract in an isolated Python environment:
 
 ```bash
@@ -197,7 +225,7 @@ PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/te
 Expected result:
 
 ```text
-Schema validation succeeded: 9 migrations, 84 tables, 120 explicit indexes, 0 FK violations.
+Schema validation succeeded: 10 migrations, 84 tables, 120 explicit indexes, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库

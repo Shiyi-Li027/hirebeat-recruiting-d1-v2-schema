@@ -28,6 +28,41 @@ G02 是 Airtable、Google Form 和未来自建页面的权威招聘目录。它�
 
 本组依赖已确认的 G01 reference tables，包括 `contact_type`、`work_mode`、`function`、`seniority`、`location`、Skill、Degree 和 Certification 字典。
 
+## Production importer defaults
+
+G02 子表使用固定白名单端点：
+
+```text
+GET   /v1/catalog/child-types
+POST  /v1/catalog/children/{catalog_child_type}
+PATCH /v1/catalog/children/{catalog_child_type}/{id}/active-state
+```
+
+覆盖 `company_contact_info`、`company_work_mode`、`position_salary_range`、
+`position_skill`、`position_education_requirement` 和
+`position_certification_requirement`。新记录未显式提供 `is_active` 时默认写入 `1`。
+
+Position 的默认状态由 JD readiness 决定：
+
+- 未显式传入 `position_status` 且 JD trim 后至少 10 字符：`active`；
+- 未显式传入 `position_status` 且 JD 缺失或不足 10 字符：`draft`；
+- 显式传入状态时使用该状态，但 `active` 始终必须通过 JD readiness gate；
+- 无有效 JD 的 Position 不进入 Catalog options，也不能通过 Initial Cleaning。
+
+人工 SQL 同样必须遵守上述推导，不允许简单省略 `position_status` 后依赖固定
+Schema default。D1/SQLite 的普通 `DEFAULT` 不能引用本行 `position_jd`，也无法区分
+“省略状态”与“显式指定 draft”。因此获批的手工 SQL 和后续批量 importer 必须使用：
+
+```sql
+CASE
+  WHEN :position_status IS NOT NULL THEN :position_status
+  WHEN length(trim(COALESCE(:position_jd, ''))) >= 10 THEN 'active'
+  ELSE 'draft'
+END
+```
+
+数据库 trigger 是最后的强制约束，继续拒绝所有 `active + 无效 JD` 写入。
+
 ## 2. 三个子组
 
 ### G02-A：Company Catalog
@@ -131,7 +166,7 @@ Company 可以有 0 条 Company Work Mode：
 | `company_id` | 否 | 所属 Company |
 | `position_name` | 否 | 展示岗位名 |
 | `normalized_position_name` | 否 | 检索/查重名称 |
-| `position_jd` | 是 | UTF-8 JD；即使 Active 也允许 NULL |
+| `position_jd` | 是 | UTF-8 JD；非 Active 状态允许 NULL，Active 时去除首尾空白后至少 10 字符 |
 | `occupational_type_id` | 是 | G01 职业分类 |
 | `employment_type_id` | 是 | internship/full-time 等 |
 | `function_id` | 是 | 岗位职能 |
@@ -315,7 +350,7 @@ Position 新建默认 `draft`，发布验证成功后才改为 `active`。申请
 | Company 联系方式 | `company_contact_info` 0 行 |
 | Company Work Mode | `company_work_mode` 0 行；UI 使用 Company → Position |
 | Position 地点 | `position.location_id = NULL` |
-| Position JD | `position.position_jd = NULL`，仍可按业务决定 active |
+| Position JD | 可在 Draft/Paused/Closed/Archived 时为 NULL；进入 Active 前必须满足 JD readiness gate |
 | Position salary/skills/education/certification requirements | 对应子表 0 行 |
 
 ## 17. 测试导出

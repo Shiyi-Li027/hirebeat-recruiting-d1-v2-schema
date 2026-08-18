@@ -27,9 +27,10 @@ crons = ["*/1 * * * *"]
 DEPLOYMENT_STAGE = "staging"
 WORKFLOW_A_VERSION = "workflow-a-v1"
 WORKFLOW_B_VERSION = "workflow-b-v1"
-ML_SERVICE_URL = "REPLACE_WITH_PRIVATE_ML_SERVICE_URL"
+ML_SERVICE_URL = "https://hirebeat-ml-inference-stg-340548608366.us-east1.run.app"
 
 # Set these with `wrangler secret put --config workers/etl-orchestrator/wrangler.toml`:
 # ML_SERVICE_AUTH_TOKEN
+# CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON
 # IDENTITY_HMAC_KEY_V1
 # ORCHESTRATOR_INTERNAL_AUTH_TOKEN

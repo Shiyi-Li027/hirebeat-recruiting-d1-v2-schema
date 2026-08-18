@@ -40,7 +40,11 @@ This plan is the release gate between a bundle-valid implementation and producti
 ## 5. Workflow B, ML and decision
 
 1. A Candidate with zero Education but valid Resume/JD reaches ML without entity-count errors.
-2. Missing/short JD, almost-empty profile, or senior role without Employment produces anomaly exclusion and `no_offer` without calling similarity when the frozen rule requires exclusion.
+2. Missing/short JD does not call similarity or create `no_offer`; the
+   Application remains `processing/pending`, Workflow B records
+   `waiting_position_jd`, and a later ready-JD Position update publishes an
+   idempotent requeue Outbox event. Zero Education, Employment, Skill, or
+   Project rows do not independently exclude the Application.
 3. Otherwise send only complete Resume text and complete Position JD to the authenticated ML service.
 4. Verify the returned hashes, model identity, cosine score, active threshold-policy snapshot and recommendation are stored.
 5. Score below the fixed threshold atomically produces Rejected; score at or above it atomically produces the ML result, hiring-stage result, Application `offer_created`, one Offer draft and one Offer-lifecycle Outbox event.

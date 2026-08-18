@@ -4,6 +4,8 @@ import { jsonBody, requirePositiveInteger, response } from "./helpers";
 import { transitionOffer } from "./offer-state";
 import { requestMlRecommendation } from "./hiring-command";
 import { createOfferVersion } from "./offer-version";
+import { createReference, referenceTypes, setReferenceActive } from "./reference-importer";
+import { catalogChildTypes, createCatalogChild, setCatalogChildActive } from "./catalog-child-importer";
 
 interface Env { DB:D1Database;DEPLOYMENT_STAGE:string;ACCESS_TEAM_DOMAIN:string;ACCESS_AUD:string; }
 
@@ -17,6 +19,16 @@ export default {
     if(request.method==="GET"&&url.pathname==="/health")return response({service:"hirebeat-operations-api",status:"running",stage:env.DEPLOYMENT_STAGE});
     try{
       const auth=await authenticateAccess(request,env.ACCESS_TEAM_DOMAIN,env.ACCESS_AUD);
+      if(request.method==="GET"&&url.pathname==="/v1/reference/types")return response({reference_types:referenceTypes()});
+      const referenceCreate=url.pathname.match(/^\/v1\/reference\/([a-z0-9_]+)$/);
+      if(request.method==="POST"&&referenceCreate)return response(await createReference(env.DB,referenceCreate[1],await jsonBody(request),auth.actor),201);
+      const referenceState=url.pathname.match(/^\/v1\/reference\/([a-z0-9_]+)\/(\d+)\/active-state$/);
+      if(request.method==="PATCH"&&referenceState)return response(await setReferenceActive(env.DB,referenceState[1],requirePositiveInteger(referenceState[2],"path_id"),await jsonBody(request),auth.actor));
+      if(request.method==="GET"&&url.pathname==="/v1/catalog/child-types")return response({catalog_child_types:catalogChildTypes()});
+      const childCreate=url.pathname.match(/^\/v1\/catalog\/children\/([a-z0-9_]+)$/);
+      if(request.method==="POST"&&childCreate)return response(await createCatalogChild(env.DB,childCreate[1],await jsonBody(request),auth.actor),201);
+      const childState=url.pathname.match(/^\/v1\/catalog\/children\/([a-z0-9_]+)\/(\d+)\/active-state$/);
+      if(request.method==="PATCH"&&childState)return response(await setCatalogChildActive(env.DB,childState[1],requirePositiveInteger(childState[2],"path_id"),await jsonBody(request),auth.actor));
       if(request.method==="GET"&&url.pathname==="/v1/catalog/options")return response(await catalogOptions(env.DB));
       if(request.method==="POST"&&url.pathname==="/v1/catalog/companies")return response(await createCompany(env.DB,await jsonBody(request),auth.actor),201);
       const companyId=idFromPath(url.pathname,/^\/v1\/catalog\/companies\/(\d+)$/);

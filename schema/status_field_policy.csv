@@ -1,0 +1,57 @@
+table_name,column_name,strategy,expected_not_null,expected_default,policy_description
+application,application_lifecycle_status,schema_default,1,processing,New admitted applications begin in processing; later changes require lifecycle commands.
+application,application_decision_status,schema_default,1,pending,No hiring decision exists when an application is first published.
+application_stage_run,run_status,schema_default,1,scheduled,A newly created business stage run is scheduled before execution.
+candidate_snapshot,snapshot_status,schema_default,1,core_published,Workflow A publishes the minimum candidate core before Workflow B enrichment.
+catalog_sync_run,sync_status,schema_default,1,pending,A new catalog synchronization waits for its dispatcher.
+catalog_sync_target_run,target_status,schema_default,1,pending,A new provider target waits for provider-specific delivery.
+certification,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+certification_type,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+city,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+company,is_active,default_active,1,1,New catalog records are active unless the writer explicitly supplies 0.
+company_contact_info,is_active,default_active,1,1,New company contacts are active unless the writer explicitly supplies 0.
+company_work_mode,is_active,default_active,1,1,New company work modes are active unless the writer explicitly supplies 0.
+contact_type,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+country,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+degree,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+etl_step_attempt,attempt_status,schema_default,1,running,An attempt row is created only when an execution attempt starts.
+etl_step_run,step_status,schema_default,1,pending,A logical step is pending before its first attempt.
+etl_workflow_run,workflow_status,schema_default,1,requested,A workflow ledger row begins as an accepted request.
+field_study,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+function,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+hiring_pipeline,pipeline_status,schema_default,1,draft,Pipeline definitions require explicit publication before use.
+issuing_organization,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+major,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+ml_analysis_run,run_status,schema_default,1,running,An ML analysis row is created when model processing starts.
+ml_threshold_policy,policy_status,schema_default,1,draft,Threshold policy versions require explicit activation.
+normalization_run,normalization_status,schema_default,1,running,A normalization run row is created when normalization starts.
+offer,current_status,schema_default,1,draft,An atomically created offer master begins as a draft.
+offer_status_history,from_status,nullable_transition_origin,0,,The first offer transition has no preceding status; later transitions supply it explicitly.
+offer_status_history,to_status,explicit_required,1,,Every history event must explicitly identify the resulting offer status.
+outbox_event,dispatch_status,schema_default,1,pending,A transactional outbox row is pending until leased by a dispatcher.
+person,person_status,schema_default,1,active,A newly created canonical person is active unless later merged or retired.
+person_certification,certification_status,schema_default,1,unknown,Certification status may be unavailable while the certification fact remains valid.
+position,position_status,conditional_importer_default,1,draft,Importer writes active only when trimmed JD has at least 10 characters; otherwise draft; database triggers reject active with an invalid JD.
+position_certification_requirement,is_active,default_active,1,1,New position requirements are active unless the writer explicitly supplies 0.
+position_education_requirement,is_active,default_active,1,1,New position requirements are active unless the writer explicitly supplies 0.
+position_employment_type,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+position_occupational_type,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+position_salary_range,is_active,default_active,1,1,New position salary ranges are active unless the writer explicitly supplies 0.
+position_skill,is_active,default_active,1,1,New position skill requirements are active unless the writer explicitly supplies 0.
+raw_submission_intake_run,intake_status,schema_default,1,received,An intake coordinator records receipt before durable Raw persistence.
+raw_submission_resume,resume_text_status,explicit_required,1,,The resolver must explicitly distinguish available failed no_resume and other terminal outcomes.
+resume_education,extraction_eligibility_status,explicit_required,1,,The extractor must explicitly record whether each candidate row is publishable and why.
+resume_employment,extraction_eligibility_status,explicit_required,1,,The extractor must explicitly record whether each candidate row is publishable and why.
+resume_extraction,extraction_status,schema_default,1,running,A Resume extraction run begins when structured extraction starts.
+resume_project,extraction_eligibility_status,explicit_required,1,,The extractor must explicitly record whether each candidate row is publishable and why.
+resume_skill,extraction_eligibility_status,explicit_required,1,,The extractor must explicitly record whether each candidate row is publishable and why.
+school,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+seniority,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+skill,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+skill_proficiency_level,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+skill_type,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+state,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.
+submission_dedup_run,run_status,schema_default,1,running,A dedup run begins when global comparison starts.
+submission_identity_feature,selection_status,explicit_required,1,,Identity extraction must explicitly record selected ambiguous or rejected disposition.
+system_configuration_release,release_status,schema_default,1,draft,Configuration releases require explicit activation and only one may be active.
+work_mode,is_active,default_active,1,1,New reviewed reference records are active unless the writer explicitly supplies 0.

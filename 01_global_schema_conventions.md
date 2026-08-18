@@ -159,6 +159,17 @@ updated_at TEXT NOT NULL
 - 原版部分导入流程通过 CSV/status 表达无输出，但没有形成一条覆盖所有子表层级的统一“零行而非空占位行”规则；新版将其提升为全局准则。
 - 新版采用“raw/staging 较宽松、published 业务层严格”的分层约束。
 
+### 约束、默认值与手写 SQL 的冻结治理规则
+
+1. 保留数据库原生 `NOT NULL`、`CHECK`、FK 和 `UNIQUE` 作为所有写入者共同的最后防线。
+2. 不给普通 `NOT NULL` 字段重复建立 Trigger；Trigger 只用于单列约束无法表达的、已经审核的跨字段不变量。
+3. `DEFAULT` 只用于存在唯一、安全且不依赖上下文的初始值。身份、父级 ID、业务证据、事件结果和无法安全推断的状态不得由数据库猜测。
+4. 正式 importer 必须在到达 D1 前返回字段级友好错误代码，并负责标准化、稳定 UUID/幂等键、时间与获准的业务推导。
+5. 手写 SQL 是受控管理/修复通道，必须从 `schema/HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql` 对应表模板开始，不允许使用空字符串、占位 ID 或 `unknown` 绕过必填规则。
+6. `schema/HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.csv` 提供逐字段必填性、NULL、默认值、FK、唯一性、CHECK/Trigger、推导规则和常见失败；配套 Markdown 提供 84 张表的摘要。
+7. `schema/status_field_policy.csv` 必须覆盖每一个 `status`、`*_status` 与 `is_active` 字段。Schema validator 对覆盖率、过期策略、NOT NULL、默认值及 Trigger allowlist 自动审计。
+8. 新增状态字段或 Trigger 时，必须在同一次变更中更新策略文件、矩阵、设计文档和测试；否则验证失败。
+
 ## 6. 外键和 ON DELETE
 
 ### 新版决定
@@ -188,7 +199,7 @@ updated_at TEXT NOT NULL
 ### 新版决定
 
 - 状态机定义允许的业务状态和转换，由专门的 Worker/Workflow service 执行。
-- 第一版业务 SQL Trigger 数量为 0。
+- 第一版仅保留 2 个已审核的 Position 跨字段保护 Trigger（分别保护 INSERT 和 UPDATE）：`position_status = 'active'` 时，trim 后的 `position_jd` 必须至少 10 个字符。Trigger 不承担 Workflow 编排。
 - 跨步骤、Queue、外部 API、通知、Offer document 和 Workflow 交接使用 `outbox_event`。
 - 同一短数据库发布动作使用 D1 `batch()`，共同成功或共同回滚。
 - 跨多个 Workflow step 的失败使用幂等重试和业务补偿，不假装是一个长数据库事务。

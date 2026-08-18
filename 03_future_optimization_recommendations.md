@@ -41,6 +41,11 @@ selection_ratio_snapshot
 
 当前继续使用原版完整 Resume/JD 输入。未来建议把 Resume 按 Education/Employment/Skills/Projects 分块，把 JD 按 Responsibilities/Requirements/Skills 分块，分别 embedding 后按经过验证的业务权重合成。
 
+当前 Cloudflare Worker 调用私有 Cloud Run 使用专用、最小权限的 Google
+service-account key 换取短期 audience-bound ID Token。未来如果 Cloudflare
+运行环境能够提供适合本项目的受信 OIDC workload identity，应迁移到 Google
+Workload Identity Federation，并删除长期 service-account private key。
+
 该方案必须先与当前基线做离线比较，确认准确性、成本和延迟收益后再进入生产。
 
 ## 6. OCR 与大模型 PDF 解析采用独立异步步骤

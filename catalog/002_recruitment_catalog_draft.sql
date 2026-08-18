@@ -92,6 +92,24 @@ CREATE TABLE position (
   CHECK (length(trim(normalized_position_name)) > 0)
 );
 
+CREATE TRIGGER trg_position_active_requires_jd_insert
+BEFORE INSERT ON position
+FOR EACH ROW
+WHEN NEW.position_status = 'active'
+ AND (NEW.position_jd IS NULL OR length(trim(NEW.position_jd)) < 10)
+BEGIN
+  SELECT RAISE(ABORT, 'position_jd_required_for_active');
+END;
+
+CREATE TRIGGER trg_position_active_requires_jd_update
+BEFORE UPDATE OF position_status, position_jd ON position
+FOR EACH ROW
+WHEN NEW.position_status = 'active'
+ AND (NEW.position_jd IS NULL OR length(trim(NEW.position_jd)) < 10)
+BEGIN
+  SELECT RAISE(ABORT, 'position_jd_required_for_active');
+END;
+
 CREATE TABLE position_salary_range (
   id INTEGER PRIMARY KEY,
   position_id INTEGER NOT NULL,

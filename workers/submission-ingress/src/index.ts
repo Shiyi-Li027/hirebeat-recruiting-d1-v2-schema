@@ -17,6 +17,7 @@ import { D1RawPublisher } from "./services/raw-publisher";
 import { requireInternalAuthentication } from "./services/internal-auth";
 import { WebCryptoPayloadHmacService } from "./services/payload-hmac";
 import { validateCanonicalIntake } from "./validation/canonical-intake-validator";
+import { GoogleServiceAccountCloudRunIdTokenProvider } from "../../shared/google-cloud-run-id-token";
 
 const SERVICE_NAME = "hirebeat-submission-ingress";
 const SERVICE_VERSION = "1.0.0-production-ingress";
@@ -89,6 +90,11 @@ function buildProductionService(env: IngressEnv): ProductionIntakeService {
     env.GOOGLE_SERVICE_ACCOUNT_JSON,
     30_000,
   );
+  const cloudRunIdTokenProvider =
+    new GoogleServiceAccountCloudRunIdTokenProvider(
+      env.CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON,
+      10_000,
+    );
   return new ProductionIntakeService(
     new D1IntakeRunRepository(env.DB),
     new D1RawSubmissionRepository(env.DB),
@@ -103,6 +109,7 @@ function buildProductionService(env: IngressEnv): ProductionIntakeService {
       new HttpParserClient(
         env.PARSER_SERVICE_URL,
         env.PARSER_SERVICE_AUTH_TOKEN,
+        cloudRunIdTokenProvider,
         configuration.parserTimeoutMs,
       ),
     new D1RawPublisher(env.DB),
