@@ -153,6 +153,13 @@ bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
 
 ### Submission Ingress Worker 验证
 
+当前 staging Cloudflare 账户没有托管域名，因此仅
+`workers/submission-ingress/wrangler.toml` 临时启用稳定的 `workers.dev`
+target，并关闭 preview URLs。所有写入端点仍必须验证
+`INGRESS_INTERNAL_AUTH_TOKEN`。Production 必须重新设为
+`workers_dev = false` 并使用公司自有 Custom Domain；不得把这一 staging
+例外直接提升到 Production。
+
 独立 Worker package 位于 `workers/submission-ingress/`。它已经接通 Airtable/Google adapter、R2、Parser、D1 原子发布和 Workflow A Outbox；部署前必须先配置真实私有服务 URL、Secrets，并在 staging 做端到端验证：
 
 ```bash
@@ -357,7 +364,21 @@ npx wrangler secret put ML_SERVICE_AUTH_TOKEN --config workers/etl-orchestrator/
 npx wrangler secret put CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON --config workers/etl-orchestrator/wrangler.toml
 ```
 
-如果 Worker 尚不存在，先在 staging 使用关闭的 public route 完成一次 bootstrap deploy，再写 Secrets，然后再次 deploy。三个 Worker 的公开路由必须保持关闭或受 Access/内部网络认证保护。
+如果 Operations Worker 尚不存在，可先使用 staging 的固定
+`workers.dev` route 完成 bootstrap deploy。此时除 `/health` 外的路由仍会
+因为缺少有效 Access JWT 而失败关闭。部署完成后，必须立即在 Cloudflare
+Dashboard 中为该 Worker 的 `workers.dev` route 启用 Cloudflare Access，
+再把 Access Team Domain 和 Application AUD 写回 TOML 并重新部署。当前 staging
+值为：
+
+- Team Domain：`https://hirebeat-recruiting-stg-027.cloudflareaccess.com`
+- Application AUD：`5f60dbf34db2d7ccdb1fb9b7271bb71efe27f1f0184297ec71fd9d7d5a9deb8d`
+- Session duration：7 天；它表示重新认证周期，不表示成员权限在 7 天后失效。
+
+AUD 是可提交的应用标识符，不是 Secret。Access JWT、`CF_Authorization`
+Cookie、service-token secret 和 Cloudflare API token 不得写入仓库。
+Preview URL 必须保持关闭。Ingress 使用内部 Bearer Token；Operations 使用
+Access；Orchestrator 不设置公开 route。
 
 ```bash
 npm run ingress:deploy:staging
@@ -366,6 +387,19 @@ npm run operations:deploy:staging
 ```
 
 Operations API 必须先建立 Cloudflare Access Self-hosted application。为项目成员建立团队 group，并让 Allow policy 只包含该 group；项目成员可以拥有 Author 权限，但 Operations API 仍以 Access JWT 记录每个操作者的 email/sub。不要共享一个人员 Token 来替代成员身份。
+
+首次 bootstrap 的安全顺序：
+
+1. 部署 Operations Worker，获得固定 `workers.dev` 地址；
+2. Cloudflare Dashboard → Workers & Pages → 选择该 Worker → Settings →
+   Domains & Routes → 对 `workers.dev` 选择 **Enable Cloudflare Access**；
+3. 在生成的 Access application 中建立只允许项目成员的 Allow policy；
+4. 复制 Access Team Domain（完整 `https://<team>.cloudflareaccess.com`）与
+   application AUD；
+5. 替换 `ACCESS_TEAM_DOMAIN` 和 `ACCESS_AUD` 占位值并重新部署；
+6. 验证 `/health` 可访问，而未登录请求访问 `/v1/reference/types` 被 Access
+   拦截；登录成员请求能够通过，并且 API 会再次校验 JWT 的签名、issuer、
+   audience 和有效期。
 
 Parser 与 ML 是容器服务，不由 Wrangler Worker 命令部署。它们必须使用私有 URL，并分别配置与 Worker 相同的 `PARSER_SERVICE_AUTH_TOKEN`、`ML_SERVICE_AUTH_TOKEN`。Ingress 与 Orchestrator 还必须配置同一个专用、最小权限的 `CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON`，用于换取 audience-bound Google ID Token；该身份只获得两个目标服务的 `roles/run.invoker`。上线前分别调用 authenticated `/ready`。完整运行边界见 `15_production_implementation_runbook.md`。
 

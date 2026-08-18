@@ -1,7 +1,8 @@
 name = "hirebeat-operations-api-v1"
 main = "src/index.ts"
 compatibility_date = "2026-08-18"
-workers_dev = false
+workers_dev = true
+preview_urls = false
 
 [[d1_databases]]
 binding = "DB"
@@ -12,5 +13,5 @@ migrations_table = "d1_migrations"
 
 [vars]
 DEPLOYMENT_STAGE = "staging"
-ACCESS_TEAM_DOMAIN = "REPLACE_WITH_ACCESS_TEAM_DOMAIN"
-ACCESS_AUD = "REPLACE_WITH_ACCESS_APPLICATION_AUD"
+ACCESS_TEAM_DOMAIN = "https://hirebeat-recruiting-stg-027.cloudflareaccess.com"
+ACCESS_AUD = "5f60dbf34db2d7ccdb1fb9b7271bb71efe27f1f0184297ec71fd9d7d5a9deb8d"

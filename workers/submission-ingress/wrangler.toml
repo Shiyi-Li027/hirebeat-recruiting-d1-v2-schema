@@ -1,7 +1,11 @@
 name = "hirebeat-submission-ingress-v1"
 main = "src/index.ts"
 compatibility_date = "2026-08-18"
-workers_dev = false
+# Staging currently has no Cloudflare-managed domain. Expose only the stable
+# workers.dev target for authenticated Airtable/Google integration testing.
+# Production must override this to false and use a reviewed custom domain.
+workers_dev = true
+preview_urls = false
 
 [[d1_databases]]
 binding = "DB"

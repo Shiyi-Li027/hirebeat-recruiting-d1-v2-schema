@@ -22,3 +22,9 @@ __pycache__/
 test-exports/**
 !test-exports/README.md
 !test-exports/00_export_manifest_schema.csv
+
+# Local source datasets can contain candidate PII and licensed/public-source
+# extracts. They may be used by read-only staging preparation tools, but their
+# rows must never enter Git history.
+test-inputs/private-source-data/**
+!test-inputs/private-source-data/README.md

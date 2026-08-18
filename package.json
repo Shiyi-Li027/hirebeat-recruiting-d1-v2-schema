@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "data:preflight": "python3 scripts/preflight_private_source_data.py",
     "test": "npm run schema:validate && npm run cloud-run-auth:test && npm run ingress:test && npm run orchestrator:test && npm run workers:build",
     "cloud-run-auth:test": "esbuild workers/shared/test/google-cloud-run-id-token.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-cloud-run-id-token-test.mjs && node /tmp/hirebeat-cloud-run-id-token-test.mjs && rm -f /tmp/hirebeat-cloud-run-id-token-test.mjs",
     "ingress:test": "npm --prefix workers/submission-ingress run test:unit",

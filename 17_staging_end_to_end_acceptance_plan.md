@@ -7,9 +7,15 @@ This plan is the release gate between a bundle-valid implementation and producti
 - staging D1, R2, Workers, Workflows, Parser, ML service and Secrets are separate from production;
 - all `REPLACE_WITH_` runtime values are replaced through staging deployment configuration;
 - Ingress and Orchestrator internal routes reject missing or invalid bearer tokens;
-- Operations routes reject requests without a valid Cloudflare Access JWT;
+- while no managed staging domain exists, Ingress and the Access-protected
+  Operations API use stable `workers.dev` targets, preview URLs are disabled,
+  and production remains prohibited from using `workers.dev`;
+- the Operations Worker code treats `/health` as non-sensitive, but the
+  one-click Access application may still protect the whole `workers.dev`
+  hostname at the edge; every authoring route requires both Access admission
+  and the Worker's own verified Access JWT;
 - R2 is private and no resume object has a public URL;
-- migrations `0001` through `0009` are applied and `PRAGMA foreign_key_check` is empty.
+- migrations `0001` through `0010` are applied and `PRAGMA foreign_key_check` is empty.
 
 ## 2. Ingress and Raw publication
 

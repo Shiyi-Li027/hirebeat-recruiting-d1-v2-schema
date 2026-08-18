@@ -101,6 +101,15 @@ Every mutation requires a caller-supplied `idempotency_key`. Migration `0008` en
 
 Place environment-specific URLs and Access identifiers in the deployment environment, not in source defaults.
 
+The initial staging Cloudflare account has no managed domain. Staging Ingress
+and Operations therefore use stable `workers.dev` targets with preview URLs
+disabled. Every Ingress mutation still requires `INGRESS_INTERNAL_AUTH_TOKEN`.
+Every Operations route except `/health` still requires a verified Cloudflare
+Access JWT, and Access must be enabled on the Operations `workers.dev` route
+before any authoring call is accepted. This is a staging-only transport
+decision: production keeps `workers_dev = false` and uses reviewed
+company-owned custom domains. Orchestrator has no public route.
+
 ## 5. Required Secrets
 
 | Runtime | Secret |

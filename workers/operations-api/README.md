@@ -4,6 +4,27 @@ This private Cloudflare Worker is the reviewed authoring boundary for Reference,
 Recruitment Catalog, hiring, and Offer commands. Every endpoint except
 `GET /health` requires a valid Cloudflare Access JWT.
 
+`GET /health` is exempt only from the Worker's application-level JWT check.
+When Access protects the entire hostname, Cloudflare may still require Access
+authentication before the request reaches that route.
+
+For the domain-less staging account, the Worker uses one stable `workers.dev`
+route with preview URLs disabled. Cloudflare Access protects all production-route
+traffic, and the Worker independently validates the Access JWT against the
+configured staging Team Domain and application AUD. Production must disable
+`workers.dev` and use a reviewed company-owned domain.
+
+Current staging Access identity:
+
+- Team Domain: `https://hirebeat-recruiting-stg-027.cloudflareaccess.com`
+- Application AUD: `5f60dbf34db2d7ccdb1fb9b7271bb71efe27f1f0184297ec71fd9d7d5a9deb8d`
+- Access session duration: 7 days (reauthentication interval, not membership
+  expiration)
+
+The AUD is a public application identifier used for JWT audience validation; it
+is not an authentication Secret. Never commit an Access JWT, `CF_Authorization`
+cookie, service-token secret, or Cloudflare API token.
+
 ## Common command rules
 
 - Every POST/PATCH body must be a JSON object.
