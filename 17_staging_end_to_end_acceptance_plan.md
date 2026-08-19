@@ -308,6 +308,20 @@ candidate file.
     hour requires an explicit `-04:00` or `-05:00` offset. Confirm inspection
     CSVs retain UTC values and append matching `_eastern` columns.
 
+Recorded Staging evidence for item 2 on 2026-08-19:
+
+- Two simultaneous `ready_to_send` transitions preserved one state mutation,
+  one history row and one audit row. The initial run exposed an unhandled D1
+  constraint error only on the losing response; no losing mutation committed.
+- Commit `4d54d6b` replaced that implementation-detail response with a fenced
+  command claim and added regression coverage for explicit and default-policy
+  deadlines, including same-target concurrency.
+- After deployment, simultaneous `sent -> accepted` and `sent -> declined`
+  commands allowed only `declined` to commit. The losing command returned
+  `offer_status_concurrent_update`; the Offer advanced exactly once from status
+  version 4 to 5, and the losing idempotency key produced no history or audit
+  row. No Schema or Migration change was required.
+
 ## 7. Inspection and release evidence
 
 - run the read-only inspection export into `test-exports/staging/<date>/<workflow_run_uuid>/`;
@@ -319,9 +333,9 @@ candidate file.
 After exporting the selected Workflow A and Workflow B evidence, generate the
 read-only closeout snapshot with `npm run acceptance:closeout:staging`. The
 command verifies foreign keys, migration currency, the clean Git worktree, the
-synthetic enrichment/idempotency boundary, both Workflow results, export
-manifest hashes and time zones, and records the current three Worker
-deployments. Its ignored JSON output deliberately distinguishes the passing
-core synthetic path from provider-native configuration and production approval
-that remain outside the current scope; it must never convert an unexecuted gate
-into a pass.
+synthetic enrichment/idempotency boundary, both Workflow results, the Offer
+status concurrency fence, export manifest hashes and time zones, and records
+the current three Worker deployments. Its ignored JSON output deliberately
+distinguishes the passing core synthetic path from provider-native
+configuration and production approval that remain outside the current scope;
+it must never convert an unexecuted gate into a pass.

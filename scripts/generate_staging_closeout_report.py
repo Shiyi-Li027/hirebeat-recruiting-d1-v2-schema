@@ -101,11 +101,25 @@ def main() -> int:
     )
     parser.add_argument("--workflow-a-uuid", required=True)
     parser.add_argument("--workflow-b-uuid", required=True)
+    parser.add_argument("--offer-concurrency-id", type=int, default=2)
+    parser.add_argument(
+        "--offer-concurrency-accepted-key",
+        default="staging-offer-2-concurrent-accepted-v1",
+    )
+    parser.add_argument(
+        "--offer-concurrency-declined-key",
+        default="staging-offer-2-concurrent-declined-v1",
+    )
     args = parser.parse_args()
 
     source = quote(args.source_record_id)
     workflow_a = quote(args.workflow_a_uuid)
     workflow_b = quote(args.workflow_b_uuid)
+    offer_concurrency_id = args.offer_concurrency_id
+    if offer_concurrency_id <= 0:
+        raise SystemExit("offer_concurrency_id_invalid")
+    accepted_key = quote(args.offer_concurrency_accepted_key)
+    declined_key = quote(args.offer_concurrency_declined_key)
     generated_at = dt.datetime.now(dt.timezone.utc).isoformat(
         timespec="milliseconds"
     ).replace("+00:00", "Z")
@@ -188,6 +202,54 @@ def main() -> int:
           AND intake.source_record_id={source};""",
         True,
     )
+    offer_concurrency = execute(
+        f"""SELECT
+          offer.id AS offer_id,
+          offer.current_status,
+          offer.status_version,
+          offer.current_offer_version_id,
+          (SELECT COUNT(*) FROM offer_status_history AS history
+            WHERE history.offer_id=offer.id
+              AND history.idempotency_key IN ({accepted_key},{declined_key}))
+            AS competing_history_count,
+          (SELECT COUNT(*) FROM offer_status_history AS history
+            WHERE history.offer_id=offer.id
+              AND history.idempotency_key={accepted_key})
+            AS accepted_history_count,
+          (SELECT COUNT(*) FROM offer_status_history AS history
+            WHERE history.offer_id=offer.id
+              AND history.idempotency_key={declined_key})
+            AS declined_history_count,
+          (SELECT history.to_status FROM offer_status_history AS history
+            WHERE history.offer_id=offer.id
+              AND history.idempotency_key IN ({accepted_key},{declined_key})
+            ORDER BY history.id DESC LIMIT 1) AS winning_status,
+          (SELECT history.idempotency_key FROM offer_status_history AS history
+            WHERE history.offer_id=offer.id
+              AND history.idempotency_key IN ({accepted_key},{declined_key})
+            ORDER BY history.id DESC LIMIT 1) AS winning_idempotency_key,
+          (SELECT COUNT(*) FROM audit_event AS audit
+            WHERE audit.event_type='command.offer.status.transition'
+              AND audit.entity_type='offer'
+              AND audit.entity_id=offer.id
+              AND audit.correlation_key IN ({accepted_key},{declined_key}))
+            AS competing_audit_count,
+          (SELECT COUNT(*) FROM audit_event AS audit
+            WHERE audit.event_type='command.offer.status.transition'
+              AND audit.entity_type='offer'
+              AND audit.entity_id=offer.id
+              AND audit.correlation_key={accepted_key})
+            AS accepted_audit_count,
+          (SELECT COUNT(*) FROM audit_event AS audit
+            WHERE audit.event_type='command.offer.status.transition'
+              AND audit.entity_type='offer'
+              AND audit.entity_id=offer.id
+              AND audit.correlation_key={declined_key})
+            AS declined_audit_count
+        FROM offer
+        WHERE offer.id={offer_concurrency_id};""",
+        True,
+    )
 
     expected_case = {
         "intake_status": "succeeded",
@@ -226,6 +288,27 @@ def main() -> int:
         == {"workflow_a", "workflow_b"}
         and all(row["workflow_status"] == "succeeded" for row in workflows)
     )
+    concurrency_passed = len(offer_concurrency) == 1
+    if concurrency_passed:
+        concurrency = offer_concurrency[0]
+        concurrency_passed = (
+            concurrency["current_status"] in {"accepted", "declined"}
+            and concurrency["status_version"] == 5
+            and concurrency["current_status"] == concurrency["winning_status"]
+            and concurrency["competing_history_count"] == 1
+            and concurrency["competing_audit_count"] == 1
+            and concurrency["accepted_history_count"]
+            + concurrency["declined_history_count"]
+            == 1
+            and concurrency["accepted_audit_count"]
+            + concurrency["declined_audit_count"]
+            == 1
+            and concurrency["winning_idempotency_key"]
+            in {
+                args.offer_concurrency_accepted_key,
+                args.offer_concurrency_declined_key,
+            }
+        )
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -262,9 +345,10 @@ def main() -> int:
         "synthetic_enrichment_case": case_passed,
         "workflow_pair": workflow_passed,
         "inspection_manifests": all(item["passed"] for item in manifests),
+        "offer_status_concurrency_fence": concurrency_passed,
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v1",
+        "schema_version": "hirebeat-staging-closeout-report-v2",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -274,10 +358,11 @@ def main() -> int:
         "worker_deployments": deployments,
         "workflow_evidence": workflows,
         "synthetic_case_evidence": synthetic_case,
+        "offer_status_concurrency_evidence": offer_concurrency,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete any still-unexecuted fault-injection and concurrency cases listed in acceptance-plan sections 2, 3A, 5, and 6.",
+            "Complete any still-unexecuted fault-injection and intake/workflow concurrency cases listed in acceptance-plan sections 2, 3A, and 5.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],
