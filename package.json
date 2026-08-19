@@ -29,6 +29,7 @@
     "orchestrator:deploy:staging": "wrangler deploy --config workers/etl-orchestrator/wrangler.toml",
     "operations:deploy:staging": "wrangler deploy --config workers/operations-api/wrangler.toml",
     "export:workflow": "python3 scripts/export_workflow_inspection.py",
+    "acceptance:closeout:staging": "python3 scripts/generate_staging_closeout_report.py",
     "schema:build": "python3 scripts/build_schema_artifacts.py && python3 scripts/generate_constraint_matrix.py",
     "schema:matrix": "python3 scripts/generate_constraint_matrix.py",
     "schema:validate": "python3 scripts/validate_schema.py",

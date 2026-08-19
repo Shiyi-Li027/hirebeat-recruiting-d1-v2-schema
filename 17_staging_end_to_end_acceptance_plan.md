@@ -315,3 +315,13 @@ candidate file.
 - record migration list, Worker versions, Parser version, ML model revision, configuration release and Catalog revision;
 - retain the GitHub Actions validation result and synthetic acceptance report;
 - obtain production GitHub Environment approval only after every required case passes.
+
+After exporting the selected Workflow A and Workflow B evidence, generate the
+read-only closeout snapshot with `npm run acceptance:closeout:staging`. The
+command verifies foreign keys, migration currency, the clean Git worktree, the
+synthetic enrichment/idempotency boundary, both Workflow results, export
+manifest hashes and time zones, and records the current three Worker
+deployments. Its ignored JSON output deliberately distinguishes the passing
+core synthetic path from provider-native configuration and production approval
+that remain outside the current scope; it must never convert an unexecuted gate
+into a pass.
