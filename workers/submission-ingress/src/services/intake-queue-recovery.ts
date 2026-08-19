@@ -49,23 +49,41 @@ function asQueueRetry(
   };
 }
 
+interface IntakeRecoveryFenceState {
+  recovery_fence_token: string | null;
+  accepted_payload_hmac: string | null;
+  intake_status: string;
+}
+
+export function queueMessageOwnsCurrentRecoveryFence(
+  message: IntakeQueueMessage,
+  row: IntakeRecoveryFenceState | null,
+): boolean {
+  if (message.deliveryKind !== "controlled_recovery") {
+    if (row === null || row.recovery_fence_token === null) return true;
+    return (
+      row.intake_status === "succeeded" ||
+      row.intake_status === "failed_terminal" ||
+      row.intake_status === "cancelled"
+    );
+  }
+  if (row === null) return false;
+  return (
+    row.recovery_fence_token === message.recoveryFenceToken &&
+    row.accepted_payload_hmac === message.acceptedPayloadHmac
+  );
+}
+
 async function ownsCurrentRecoveryFence(
   db: D1Database,
   message: IntakeQueueMessage,
 ): Promise<boolean> {
   const row = await db.prepare(
-    `SELECT recovery_fence_token, accepted_payload_hmac
+    `SELECT recovery_fence_token, accepted_payload_hmac, intake_status
      FROM raw_submission_intake_run
      WHERE submission_uuid = ?1`,
-  ).bind(message.submissionUuid).first<{
-    recovery_fence_token: string | null;
-    accepted_payload_hmac: string | null;
-  }>();
-  if (!row) return (message.recoveryFenceToken ?? null) === null;
-  return (
-    row.recovery_fence_token === (message.recoveryFenceToken ?? null) &&
-    row.accepted_payload_hmac === message.acceptedPayloadHmac
-  );
+  ).bind(message.submissionUuid).first<IntakeRecoveryFenceState>();
+  return queueMessageOwnsCurrentRecoveryFence(message, row);
 }
 
 export async function processIntakeQueueMessage(options: {

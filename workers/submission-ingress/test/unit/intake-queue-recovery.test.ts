@@ -4,6 +4,7 @@ import { IngressError } from "../../src/errors/ingress-error";
 import { isIntakeQueueMessage } from "../../src/contracts/intake-queue-message";
 import {
   classifyIntakeFailure,
+  queueMessageOwnsCurrentRecoveryFence,
   queueBackoffSeconds,
 } from "../../src/services/intake-queue-recovery";
 
@@ -64,5 +65,50 @@ assert.equal(isIntakeQueueMessage({
   deliveryKind: "initial",
   recoveryFenceToken: "unexpected-fence",
 }), false);
+
+const acceptedPayloadHmac = "a".repeat(64);
+const initialMessage = {
+  ...common,
+  schemaVersion: "intake-queue-message-v2" as const,
+  deliveryKind: "initial" as const,
+  recoveryFenceToken: null,
+};
+const recoveryMessage = {
+  ...common,
+  schemaVersion: "intake-queue-message-v2" as const,
+  deliveryKind: "controlled_recovery" as const,
+  recoveryFenceToken: "recovery-fence-1",
+};
+const activeRecovery = {
+  recovery_fence_token: "recovery-fence-1",
+  accepted_payload_hmac: acceptedPayloadHmac,
+  intake_status: "failed_retryable",
+};
+assert.equal(
+  queueMessageOwnsCurrentRecoveryFence(initialMessage, activeRecovery),
+  false,
+  "an ordinary stale delivery must not race an active controlled recovery",
+);
+assert.equal(
+  queueMessageOwnsCurrentRecoveryFence(recoveryMessage, activeRecovery),
+  true,
+  "the matching controlled-recovery message owns the active fence",
+);
+assert.equal(
+  queueMessageOwnsCurrentRecoveryFence(
+    initialMessage,
+    { ...activeRecovery, intake_status: "succeeded" },
+  ),
+  true,
+  "a completed Intake must accept ordinary redelivery for idempotency audit",
+);
+assert.equal(
+  queueMessageOwnsCurrentRecoveryFence(
+    { ...recoveryMessage, recoveryFenceToken: "stale-fence" },
+    activeRecovery,
+  ),
+  false,
+  "a stale controlled-recovery message must lose the fence",
+);
 
 console.log("Intake Queue classification and backoff tests passed.");
