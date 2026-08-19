@@ -20,6 +20,10 @@ DEFAULT_OUTPUTS = {
         "test-exports/staging/synthetic-inputs/"
         "hirebeat-synthetic-jd-waiting-resume.pdf"
     ),
+    "enrichment": Path(
+        "test-exports/staging/synthetic-inputs/"
+        "hirebeat-synthetic-enrichment-resume.pdf"
+    ),
 }
 
 RESUME_LINES = (
@@ -97,10 +101,39 @@ JD_WAITING_RESUME_LINES = (
     "This PDF contains no real person, employer, credential, or contact data.",
 )
 
+ENRICHMENT_RESUME_LINES = (
+    "TAYLOR KIM",
+    "Synthetic Candidate Enrichment Applicant",
+    "taylor.kim.synthetic@example.com | +1 202 555 0184",
+    "",
+    "SUMMARY",
+    "Data analyst with synthetic experience in repeatable reporting,",
+    "data validation, monitoring, and documented operational workflows.",
+    "",
+    "SKILLS",
+    "Python, SQL, Git, Synthetic Unmapped Tool",
+    "",
+    "EXPERIENCE",
+    "Synthetic Enrichment Lab",
+    "Data Quality Analyst",
+    "2024 - Present",
+    "Built synthetic validation checks and operational dashboards.",
+    "",
+    "EDUCATION",
+    "Example State University",
+    "Bachelor of Science in Information Systems | 2024",
+    "",
+    "PROJECTS",
+    "Synthetic Candidate Enrichment Verification",
+    "Validated Person and Candidate snapshot publication using test-only data.",
+    "This PDF contains no real person, employer, credential, or contact data.",
+)
+
 FIXTURES = {
     "primary": RESUME_LINES,
     "resubmission": RESUBMISSION_RESUME_LINES,
     "jd_waiting": JD_WAITING_RESUME_LINES,
+    "enrichment": ENRICHMENT_RESUME_LINES,
 }
 
 

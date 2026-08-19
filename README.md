@@ -124,6 +124,8 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 - Zero Education, Employment, Skill or Project rows do not independently reject
   an Application in ML v1; the frozen similarity input remains full Resume text
   plus Position JD.
+- Unmapped Resume Skill tokens remain rejected extraction evidence; only active
+  reviewed Skill Catalog matches are published to Person/Candidate.
 - Shared entities such as Company, Position, Skill, School, and Person are not deleted by a failed application workflow.
 - Reliable asynchronous handoffs use the Outbox pattern. SQL triggers are not used for workflow orchestration; the narrow Position trigger only protects the local invariant that an Active Position must have a usable JD.
 - Automatic recovery uses the owning platform primitive: Queue/DLQ for Intake delivery, Workflows for step retries, Outbox leases for committed handoffs, scheduled reconciliation for durable business waits/deadlines, and decision fences for stale-work cancellation. See [`18_automatic_recovery_policy.md`](18_automatic_recovery_policy.md).

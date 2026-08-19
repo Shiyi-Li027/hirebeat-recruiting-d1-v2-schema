@@ -245,6 +245,42 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
    newer Workflow B row is already running, even if the Application itself is
    still `processing + pending`.
 
+### 5B. Candidate and Person enrichment acceptance fixture
+
+This case verifies the complete Application-to-Candidate/Person publication
+boundary. It uses only synthetic applicant data and a minimal reviewed subset
+of the private-source Skill candidates; it must not bulk-import the full Skill
+candidate file.
+
+1. Run `npm run acceptance:enrichment:prepare`. Review the dry-run plan and
+   confirm it selects exactly `Git`, `Python`, and `SQL`, with their reviewed
+   Skill Types. Apply it only with the exact printed confirmation value. The
+   protected Operations API must create the three active Skills, two active
+   Skill Types, their assignments, and command audit events idempotently.
+2. Generate `hirebeat-synthetic-enrichment-resume.pdf` with
+   `npm run acceptance:enrichment:resume:generate`. Upload it to the private
+   staging Drive folder and share only that file with the staging Drive-reader
+   service account.
+3. Submit source record `staging-google-enrichment-001` for synthetic applicant
+   Taylor Kim against an active Position with a ready JD. Wait for Workflow A
+   and Workflow B to succeed.
+4. Require one Application, one enriched Candidate snapshot, and one Person.
+   Require the Person current-Application and current-Candidate pointers to
+   reference this case. Require one eligible education, employment, and project
+   record to be represented in both the durable Person facts and the Candidate
+   snapshot links; require the highest-education and current-position pointers
+   to be populated.
+5. Require four `resume_skill` evidence rows: `Python`, `SQL`, and `Git` as
+   `eligible`, plus `Synthetic Unmapped Tool` as
+   `rejected_unmapped_skill` with no `skill_id`. Require exactly three
+   `person_skill` and three `candidate_skill` rows. The rejected token must not
+   enter either published Skill table.
+6. Redeliver the same stable source record ID. Require no additional Raw
+   Submission, Application, Candidate snapshot, Person fact, or Candidate link.
+   Existing Person Skills may advance `last_seen_at` only when a genuinely new
+   admitted Candidate snapshot supplies the same reviewed Skill; technical
+   redelivery alone must not do so.
+
 ## 6. Operations and Offer
 
 1. Repeat the same Catalog, Hiring, Offer-version and Offer-status command with the same idempotency key. Expect one business mutation and one reusable command result.

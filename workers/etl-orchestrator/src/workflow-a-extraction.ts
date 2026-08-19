@@ -1,7 +1,8 @@
 import { keyedHmac, normalizeEmail, normalizePhone, normalizedUrl, normalizeWhitespace } from "./crypto";
 import {
+  classifySkillCandidates,
   extractEducation, extractEmployment, extractIdentityCandidates,
-  extractProjects, skillSectionText,
+  extractProjects,
 } from "./resume-rule-extractor";
 
 export interface ExtractionResult {
@@ -59,11 +60,14 @@ export async function extractResume(
   const skills=await db.prepare(
     `SELECT id,skill_name,normalized_skill_name FROM skill WHERE is_active=1 ORDER BY length(normalized_skill_name) DESC`,
   ).all<{id:number;skill_name:string;normalized_skill_name:string}>();
-  const skillText=skillSectionText(input.resume_text).toLowerCase();
-  const matchedSkills=skills.results.filter((skill)=>{
-    const escaped=skill.normalized_skill_name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`,"i").test(skillText);
-  });
+  const skillCandidates=classifySkillCandidates(input.resume_text,skills.results);
+  const matchedSkills=skillCandidates.filter(
+    (skill)=>skill.extractionEligibilityStatus==="eligible",
+  );
+  const unmappedSkillCount=skillCandidates.length-matchedSkills.length;
+  const warningsJson=unmappedSkillCount===0?"[]":JSON.stringify([
+    {code:"unmapped_skill_candidates",count:unmappedSkillCount},
+  ]);
   const now=new Date().toISOString();
   const extractionUuid=crypto.randomUUID();
   await db.prepare(
@@ -74,10 +78,11 @@ export async function extractResume(
        education_record_count,employment_record_count,skill_record_count,
        project_record_count,warning_count,warnings_json,started_at,created_at,updated_at
      ) VALUES (?1,?2,?3,?4,?5,'resume-rule-extraction-v1',?6,?7,'running',
-               0,?8,?9,?10,?11,0,'[]',?12,?12,?12)`,
+               0,?8,?9,?10,?11,?12,?13,?14,?14,?14)`,
   ).bind(extractionUuid,submissionNormalizedId,input.raw_submission_resume_id,workflowRunId,
     stepRunId,`extract:${submissionNormalizedId}:v1`,input.resume_text_sha256,
-    education.length,employment.length,matchedSkills.length,projects.length,now).run();
+    education.length,employment.length,skillCandidates.length,projects.length,
+    unmappedSkillCount,warningsJson,now).run();
   const extraction=await db.prepare(`SELECT id FROM resume_extraction WHERE resume_extraction_uuid=?1`)
     .bind(extractionUuid).first<{id:number}>();
   if(!extraction)throw new Error("resume_extraction_create_failed");
@@ -115,14 +120,17 @@ export async function extractResume(
       status,status==="eligible"?null:status,now).run();
   }
   order=0;
-  for(const skill of matchedSkills){
+  for(const skill of skillCandidates){
     order+=1;
     await db.prepare(
       `INSERT INTO resume_skill (
          resume_extraction_id,source_entry_order,raw_skill_text,normalized_skill_name,
-         skill_id,matched_context_text,match_method,extraction_eligibility_status,created_at
-       ) VALUES (?1,?2,?3,?4,?5,?6,'catalog_exact','eligible',?7)`,
-    ).bind(extraction.id,order,skill.skill_name,skill.normalized_skill_name,skill.id,skillText.slice(0,2000),now).run();
+         skill_id,matched_context_text,match_method,extraction_eligibility_status,
+         rejection_reason_detail,created_at
+       ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)`,
+    ).bind(extraction.id,order,skill.rawSkillText,skill.normalizedSkillName,
+      skill.skillId,skill.rawSkillText,skill.matchMethod,
+      skill.extractionEligibilityStatus,skill.rejectionReasonDetail,now).run();
   }
   order=0;
   for(const item of projects){

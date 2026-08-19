@@ -24,7 +24,7 @@ Airtable Automation / Google Apps Script
   -> protected Operations API creates immutable Offer versions and advances Offer state
 ```
 
-All child entity sets allow zero rows. ML receives only complete `resume_text` and `position_jd`; it does not require Education, Employment, Skill, or Project rows. The frozen anomaly rules remain separate from cosine similarity.
+All child entity sets allow zero rows. ML receives only complete `resume_text` and `position_jd`; it does not require Education, Employment, Skill, or Project rows. The frozen anomaly rules remain separate from cosine similarity. Skill tokens that do not match the active reviewed Skill Catalog remain in `resume_skill` as `rejected_unmapped_skill` evidence and are never promoted into `person_skill` or `candidate_skill`.
 
 The active `workflow.default_step_max_attempts` value counts total attempts, including the original call. Cloudflare Workflows gives `retries.limit` the same total-attempt meaning, so the adapter passes the configured value directly, uses exponential backoff from one second, and applies a ten-minute per-step timeout. Permanent validation, configuration and stale-fence failures stop immediately through `NonRetryableError`. ML and Parser HTTP calls additionally enforce their shorter 30-second request timeout.
 

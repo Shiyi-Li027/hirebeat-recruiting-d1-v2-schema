@@ -29,6 +29,21 @@ export interface ProjectCandidate {
   projectUrl: string | null;
 }
 
+export interface SkillCatalogRow {
+  id: number;
+  skill_name: string;
+  normalized_skill_name: string;
+}
+
+export interface SkillCandidate {
+  rawSkillText: string;
+  normalizedSkillName: string;
+  skillId: number | null;
+  matchMethod: "catalog_exact";
+  extractionEligibilityStatus: "eligible" | "rejected_unmapped_skill";
+  rejectionReasonDetail: string | null;
+}
+
 interface SectionMap { education: string[]; employment: string[]; skills: string[]; projects: string[]; }
 
 const HEADINGS: Array<[keyof SectionMap, RegExp]> = [
@@ -127,4 +142,62 @@ export function extractProjects(text: string): ProjectCandidate[] {
 
 export function skillSectionText(text: string): string {
   return sections(text).skills.join("\n");
+}
+
+function skillTokens(text: string): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const line of sections(text).skills) {
+    for (const part of line.split(/[,;|\u2022]+/)) {
+      const raw = normalizeWhitespace(part.replace(/^[-*\u2013\u2014]+\s*/, ""));
+      if (!raw) continue;
+      const key = raw.normalize("NFKC").toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(raw);
+    }
+  }
+  return result;
+}
+
+export function classifySkillCandidates(
+  text: string,
+  catalog: SkillCatalogRow[],
+): SkillCandidate[] {
+  const result: SkillCandidate[] = [];
+  const matchedSkillIds = new Set<number>();
+  const orderedCatalog = [...catalog].sort(
+    (left, right) => right.normalized_skill_name.length - left.normalized_skill_name.length,
+  );
+  for (const rawSkillText of skillTokens(text)) {
+    const normalizedToken = rawSkillText.normalize("NFKC").toLowerCase();
+    const tokenMatches = orderedCatalog.filter((skill) => {
+      const escaped = skill.normalized_skill_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(normalizedToken);
+    });
+    if (tokenMatches.length === 0) {
+      result.push({
+        rawSkillText,
+        normalizedSkillName: normalizedToken,
+        skillId: null,
+        matchMethod: "catalog_exact",
+        extractionEligibilityStatus: "rejected_unmapped_skill",
+        rejectionReasonDetail: "active_skill_catalog_match_not_found",
+      });
+      continue;
+    }
+    for (const skill of tokenMatches) {
+      if (matchedSkillIds.has(skill.id)) continue;
+      matchedSkillIds.add(skill.id);
+      result.push({
+        rawSkillText,
+        normalizedSkillName: skill.normalized_skill_name,
+        skillId: skill.id,
+        matchMethod: "catalog_exact",
+        extractionEligibilityStatus: "eligible",
+        rejectionReasonDetail: null,
+      });
+    }
+  }
+  return result;
 }
