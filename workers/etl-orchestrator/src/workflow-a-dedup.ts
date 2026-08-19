@@ -11,8 +11,20 @@ export interface DedupResult {
 }
 
 interface TargetRow{ id:number;company_id:number;position_id:number;requested_start_year_month:string|null;normalized_last_name:string|null; }
-interface MatchRow{ prior_id:number;has_application:number;source_submitted_at:string|null;strong_count:number;resume_count:number;total_count:number; }
+interface MatchRow{
+  prior_id:number;has_application:number;source_submitted_at:string|null;
+  email_count:number;phone_count:number;linkedin_count:number;github_count:number;
+  strong_count:number;resume_count:number;total_count:number;
+}
 interface PriorApplication{ id:number;application_lifecycle_status:string;application_decision_status:string;submission_attempt_number:number;max_submission_attempts_snapshot:number; }
+
+export function primaryMatchRule(match: Pick<MatchRow,"email_count"|"phone_count"|"linkedin_count"|"github_count">): string {
+  if(match.email_count>0)return "email_exact_match";
+  if(match.phone_count>0)return "phone_last_10_exact_match";
+  if(match.linkedin_count>0)return "linkedin_exact_match";
+  if(match.github_count>0)return "github_exact_match_with_same_normalized_last_name";
+  throw new Error("dedup_match_has_no_supported_primary_rule");
+}
 
 export async function runDedup(
   db:D1Database,workflowRunId:number,stepRunId:number,submissionNormalizedId:number,
@@ -79,6 +91,10 @@ export async function runDedup(
     `SELECT prior.id prior_id,
             EXISTS(SELECT 1 FROM application_source_lineage l WHERE l.source_submission_normalized_id=prior.id AND l.relation_role='primary_decision_input') has_application,
             raw.source_submitted_at,
+            SUM(CASE WHEN target_feature.feature_type='email' THEN 1 ELSE 0 END) email_count,
+            SUM(CASE WHEN target_feature.feature_type='phone' THEN 1 ELSE 0 END) phone_count,
+            SUM(CASE WHEN target_feature.feature_type='linkedin_url' THEN 1 ELSE 0 END) linkedin_count,
+            SUM(CASE WHEN target_feature.feature_type='github_url' AND target.normalized_last_name=prior.normalized_last_name THEN 1 ELSE 0 END) github_count,
             SUM(CASE WHEN target_feature.feature_type IN ('email','phone','linkedin_url') THEN 1 ELSE 0 END) strong_count,
             SUM(CASE WHEN target_feature.feature_type='github_url' AND target.normalized_last_name=prior.normalized_last_name THEN 1 ELSE 0 END) resume_count,
             COUNT(*) total_count
@@ -102,6 +118,7 @@ export async function runDedup(
   for(const match of matches){
     const isSelected=selected===null&&match.has_application===1;
     if(isSelected)selected=match.prior_id;
+    const primaryRule=primaryMatchRule(match);
     const matchUuid=crypto.randomUUID();
     await db.prepare(
       `INSERT INTO submission_dedup_match (
@@ -110,7 +127,7 @@ export async function runDedup(
          strong_evidence_count,resume_identity_evidence_count,total_evidence_count,
          has_strong_identity_match,has_resume_identity_match,final_match_score,matched_at,created_at
        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,1.0,?12,?12)`,
-    ).bind(matchUuid,run.id,submissionNormalizedId,match.prior_id,match.strong_count>0?"strong_identity_exact":"github_plus_last_name",
+    ).bind(matchUuid,run.id,submissionNormalizedId,match.prior_id,primaryRule,
       isSelected?1:0,match.strong_count,match.resume_count,match.total_count,match.strong_count>0?1:0,match.resume_count>0?1:0,now).run();
     const matchId=await db.prepare(`SELECT id FROM submission_dedup_match WHERE dedup_match_uuid=?1`).bind(matchUuid).first<{id:number}>();
     if(!matchId)throw new Error("dedup_match_create_failed");
@@ -122,7 +139,9 @@ export async function runDedup(
          ON prior_feature.submission_normalized_id=?2
         AND prior_feature.feature_type=target_feature.feature_type
         AND prior_feature.normalized_value_hmac=target_feature.normalized_value_hmac
-       WHERE target_feature.submission_normalized_id=?1`,
+       WHERE target_feature.submission_normalized_id=?1
+       ORDER BY CASE target_feature.feature_type
+         WHEN 'email' THEN 1 WHEN 'phone' THEN 2 WHEN 'linkedin_url' THEN 3 ELSE 4 END`,
     ).bind(submissionNormalizedId,match.prior_id).all<{target_id:number;prior_id:number;feature_type:string;normalized_value_hmac:string;hmac_key_version:string}>();
     let evidenceOrder=0;
     for(const item of evidence.results){
@@ -138,7 +157,7 @@ export async function runDedup(
          matched_normalized_last_name_hmac,evidence_metadata_json,created_at
        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1.0,?10,?11,'{}',?12)`,
     ).bind(crypto.randomUUID(),matchId.id,evidenceType,item.feature_type==="github_url"?"medium":"strong",
-      item.target_id,item.prior_id,item.normalized_value_hmac,item.hmac_key_version,evidenceOrder===1?1:0,
+      item.target_id,item.prior_id,item.normalized_value_hmac,item.hmac_key_version,evidenceType===primaryRule?1:0,
       item.feature_type==="github_url"?1:null,githubLastNameHmac,now).run();}
   }
   let entry:string;let attempt:number|null;let reason:string;let previous:PriorApplication|null=null;

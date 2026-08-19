@@ -11,7 +11,7 @@
     "test": "npm run schema:validate && npm run cloud-run-auth:test && npm run ingress:test && npm run orchestrator:test && npm run operations:test && npm run workers:build",
     "cloud-run-auth:test": "esbuild workers/shared/test/google-cloud-run-id-token.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-cloud-run-id-token-test.mjs && node /tmp/hirebeat-cloud-run-id-token-test.mjs && rm -f /tmp/hirebeat-cloud-run-id-token-test.mjs",
     "ingress:test": "npm --prefix workers/submission-ingress run test:unit",
-    "orchestrator:test": "esbuild workers/etl-orchestrator/test/outbox-idempotency.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-outbox-idempotency-test.mjs && node /tmp/hirebeat-outbox-idempotency-test.mjs && rm -f /tmp/hirebeat-outbox-idempotency-test.mjs",
+    "orchestrator:test": "esbuild workers/etl-orchestrator/test/outbox-idempotency.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-outbox-idempotency-test.mjs && node /tmp/hirebeat-outbox-idempotency-test.mjs && esbuild workers/etl-orchestrator/test/dedup-rule-mapping.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-dedup-rule-mapping-test.mjs && node /tmp/hirebeat-dedup-rule-mapping-test.mjs && rm -f /tmp/hirebeat-outbox-idempotency-test.mjs /tmp/hirebeat-dedup-rule-mapping-test.mjs",
     "workers:build": "npm run ingress:build && npm run orchestrator:build && npm run operations:build",
     "ingress:build": "wrangler deploy --dry-run --config workers/submission-ingress/wrangler.toml",
     "orchestrator:build": "wrangler deploy --dry-run --config workers/etl-orchestrator/wrangler.toml",
