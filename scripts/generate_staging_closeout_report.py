@@ -22,6 +22,12 @@ WORKER_CONFIGS = {
     "etl_orchestrator": "workers/etl-orchestrator/wrangler.toml",
     "operations_api": "workers/operations-api/wrangler.toml",
 }
+FAULT_SOURCE_RECORD_IDS = {
+    "source_download": "staging-google-fault-source-download-retry-once-001",
+    "parser_429": "staging-google-fault-parser-429-retry-once-001",
+    "parser_timeout": "staging-google-fault-parser-timeout-retry-once-001",
+    "parser_empty": "staging-google-fault-parser-empty-terminal-001",
+}
 
 
 def command(args: list[str]) -> str:
@@ -371,6 +377,82 @@ def main() -> int:
             AS workflow_run_count;""",
         True,
     )
+    fault_sources = ",".join(
+        quote(value) for value in FAULT_SOURCE_RECORD_IDS.values()
+    )
+    source_parser_faults = execute(
+        f"""SELECT
+          intake.source_record_id,
+          intake.submission_uuid,
+          intake.intake_status,
+          intake.attempt_count,
+          intake.technical_redelivery_count,
+          intake.last_technical_redelivery_mechanism,
+          intake.last_technical_redelivery_cause_code,
+          intake.last_error_code,
+          (SELECT COUNT(*) FROM raw_submission AS raw
+            WHERE raw.raw_submission_intake_run_id=intake.id)
+            AS raw_submission_count,
+          (SELECT COUNT(*) FROM raw_submission_resume AS resume
+            WHERE resume.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS resume_count,
+          (SELECT COUNT(DISTINCT resume.resume_r2_object_key)
+             FROM raw_submission_resume AS resume
+            WHERE resume.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS distinct_resume_r2_key_count,
+          (SELECT resume.resume_text_status
+             FROM raw_submission_resume AS resume
+            WHERE resume.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id)
+            LIMIT 1) AS resume_text_status,
+          (SELECT COUNT(*) FROM outbox_event AS outbox
+            WHERE outbox.aggregate_type='raw_submission'
+              AND outbox.event_type='raw_submission.published'
+              AND outbox.aggregate_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS raw_published_outbox_count,
+          (SELECT COUNT(*) FROM etl_workflow_run AS workflow
+            WHERE workflow.workflow_type='workflow_a'
+              AND workflow.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS workflow_a_count,
+          (SELECT workflow.workflow_status
+             FROM etl_workflow_run AS workflow
+            WHERE workflow.workflow_type='workflow_a'
+              AND workflow.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id)
+            ORDER BY workflow.id DESC LIMIT 1) AS workflow_a_status,
+          (SELECT audit.reason_code FROM audit_event AS audit
+            WHERE audit.entity_type='raw_submission'
+              AND audit.event_type='submission.initial_cleaning_blocked'
+              AND audit.entity_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id)
+            ORDER BY audit.id DESC LIMIT 1) AS initial_cleaning_reason,
+          (SELECT COUNT(*) FROM submission_normalized AS normalized
+            WHERE normalized.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS normalized_count,
+          (SELECT COUNT(*) FROM application_source_lineage AS lineage
+            WHERE lineage.source_raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS application_lineage_count
+        FROM raw_submission_intake_run AS intake
+        WHERE intake.source_system='google_form'
+          AND intake.source_record_id IN ({fault_sources})
+        ORDER BY intake.source_record_id;""",
+        True,
+    )
 
     expected_case = {
         "intake_status": "succeeded",
@@ -463,6 +545,47 @@ def main() -> int:
                 "workflow_run_count",
             )
         )
+    fault_rows = {
+        row["source_record_id"]: row for row in source_parser_faults
+    }
+    source_parser_faults_passed = set(fault_rows) == set(
+        FAULT_SOURCE_RECORD_IDS.values()
+    )
+    if source_parser_faults_passed:
+        for key in ("source_download", "parser_429", "parser_timeout"):
+            row = fault_rows[FAULT_SOURCE_RECORD_IDS[key]]
+            source_parser_faults_passed = source_parser_faults_passed and (
+                row["intake_status"] == "succeeded"
+                and row["attempt_count"] == 2
+                and row["technical_redelivery_count"] == 1
+                and row["last_technical_redelivery_mechanism"] == "queue_retry"
+                and row["last_technical_redelivery_cause_code"]
+                == "cloudflare_queue_redelivery"
+                and row["last_error_code"] is None
+                and row["raw_submission_count"] == 1
+                and row["resume_count"] == 1
+                and row["distinct_resume_r2_key_count"] == 1
+                and row["resume_text_status"] == "available"
+                and row["raw_published_outbox_count"] == 1
+            )
+        empty = fault_rows[FAULT_SOURCE_RECORD_IDS["parser_empty"]]
+        source_parser_faults_passed = source_parser_faults_passed and (
+            empty["intake_status"] == "succeeded"
+            and empty["attempt_count"] == 1
+            and empty["technical_redelivery_count"] == 0
+            and empty["last_error_code"] == "parser_empty_resume_text"
+            and empty["raw_submission_count"] == 1
+            and empty["resume_count"] == 1
+            and empty["distinct_resume_r2_key_count"] == 1
+            and empty["resume_text_status"] == "parse_failed_terminal"
+            and empty["raw_published_outbox_count"] == 1
+            and empty["workflow_a_count"] == 1
+            and empty["workflow_a_status"] == "succeeded"
+            and empty["initial_cleaning_reason"]
+            == "resume_text_missing_or_too_short"
+            and empty["normalized_count"] == 0
+            and empty["application_lineage_count"] == 0
+        )
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -504,9 +627,10 @@ def main() -> int:
         "malformed_envelope_zero_write_fence": (
             malformed_envelope_zero_write_passed
         ),
+        "source_parser_fault_injection": source_parser_faults_passed,
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v4",
+        "schema_version": "hirebeat-staging-closeout-report-v5",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -519,10 +643,11 @@ def main() -> int:
         "offer_status_concurrency_evidence": offer_concurrency,
         "intake_concurrency_evidence": intake_concurrency,
         "malformed_envelope_evidence": malformed_envelope,
+        "source_parser_fault_evidence": source_parser_faults,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete still-unexecuted source/Parser fault injection and Workflow/Outbox retry cases listed in acceptance-plan sections 2, 3, 3A, and 5.",
+            "Complete still-unexecuted Workflow/Outbox retry cases listed in acceptance-plan sections 3, 3A, and 5.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],

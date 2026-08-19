@@ -159,6 +159,23 @@ private source CSVs and generated preflight JSON remain ignored by Git.
    Queue message from the previous cycle and verify the recovery-fence mismatch
    makes it a no-op.
 
+Recorded Staging evidence for step 2 on 2026-08-19:
+
+- The source-download, Parser HTTP 429 and Parser-timeout retry-once fixtures
+  each returned HTTP 202, failed D1-fenced attempt 1, and recovered through one
+  real Cloudflare Queue redelivery. Each Intake completed `succeeded` with
+  `attempt_count = 2`, one technical `queue_retry`, cleared `last_error_code`,
+  one Raw Submission, one available Resume and one Raw-published Outbox event.
+- The Parser empty-text fixture completed in one attempt without technical
+  redelivery. It retained the original PDF in R2, published one Raw Submission
+  and one Resume with `parse_failed_terminal`, and retained
+  `parser_empty_resume_text` on the successful Intake as the terminal Resume
+  outcome.
+- Workflow A consumed the empty-text Raw event exactly once, recorded
+  `resume_text_missing_or_too_short`, and created neither a normalized
+  Submission nor Application lineage. All four cases passed the foreign-key
+  check.
+
 Recorded Staging evidence for step 4 on 2026-08-19:
 
 - The protected negative-boundary runner submitted an authenticated malformed
