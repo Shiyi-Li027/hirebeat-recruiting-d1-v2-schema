@@ -9,6 +9,7 @@ import { tracked, WorkflowLedger, type WorkflowRunIdentity } from "./workflow-le
 import { loadOrchestratorConfiguration } from "./runtime-configuration";
 import { compensateWorkflowAStaging } from "./workflow-a-compensation";
 import { toWorkflowThrowable } from "./workflow-errors";
+import { StagingOrchestratorFaultInjector } from "./staging-orchestrator-fault-injector";
 
 const WORKFLOW_A_STEP_VERSION = "workflow-a-step-v1";
 
@@ -48,6 +49,10 @@ export async function executeWorkflowA(
   });
   const run = await doConfigured("register-workflow-a", () => workflowRun(env, payload));
   const ledger = new WorkflowLedger(env.DB,configuration.defaultStepMaxAttempts);
+  const faultInjector = new StagingOrchestratorFaultInjector(
+    env.DEPLOYMENT_STAGE,
+    env.ENABLE_STAGING_FAULT_INJECTION,
+  );
 
   try {
     const cleaning = await doConfigured("initial-cleaning", () => tracked(
@@ -69,7 +74,20 @@ export async function executeWorkflowA(
       run.id,
       "normalize_submission",
       "Normalize submission",
-      (stepRunId) => normalizeSubmission(env.DB, run.id, stepRunId, payload.rawSubmissionId),
+      async (stepRunId, attemptNumber) => {
+        await faultInjector.beforeWorkflowAStep(
+          env.DB,
+          payload.rawSubmissionId,
+          "normalize_submission",
+          attemptNumber,
+        );
+        return normalizeSubmission(
+          env.DB,
+          run.id,
+          stepRunId,
+          payload.rawSubmissionId,
+        );
+      },
     ));
     const extraction = await doConfigured("extract-resume-entities", () => tracked<ExtractionResult>(
       ledger,

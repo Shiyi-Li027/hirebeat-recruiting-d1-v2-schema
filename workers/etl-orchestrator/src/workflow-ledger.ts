@@ -194,11 +194,11 @@ export async function tracked<T>(
   workflowRunId: number,
   key: string,
   name: string,
-  operation: (stepRunId: number) => Promise<T>,
+  operation: (stepRunId: number, attemptNumber: number) => Promise<T>,
 ): Promise<T> {
   const identity = await ledger.startStep({ workflowRunId, key, name, version: "v1" });
   try {
-    const result = await operation(identity.stepRunId);
+    const result = await operation(identity.stepRunId, identity.attemptNumber);
     await ledger.finishStep(identity);
     return result;
   } catch (error) {

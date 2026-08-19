@@ -3,6 +3,7 @@ import type {
   WorkflowAParams,
   WorkflowBParams,
 } from "./env";
+import { StagingOrchestratorFaultInjector } from "./staging-orchestrator-fault-injector";
 
 interface OutboxRow {
   id: number;
@@ -95,7 +96,14 @@ export async function createOrConfirmWorkflow<PARAMS>(
 }
 
 export class OutboxDispatcher {
-  constructor(private readonly env: OrchestratorEnv) {}
+  private readonly faultInjector: StagingOrchestratorFaultInjector;
+
+  constructor(private readonly env: OrchestratorEnv) {
+    this.faultInjector = new StagingOrchestratorFaultInjector(
+      env.DEPLOYMENT_STAGE,
+      env.ENABLE_STAGING_FAULT_INJECTION,
+    );
+  }
 
   private async claim(owner: string, now: string): Promise<OutboxRow | null> {
     const leaseExpiry = new Date(Date.parse(now) + 60_000).toISOString();
@@ -129,6 +137,12 @@ export class OutboxDispatcher {
   }
 
   private async publish(row: OutboxRow): Promise<void> {
+    await this.faultInjector.beforeOutboxPublish(this.env.DB, {
+      eventType: row.event_type,
+      destinationKey: row.destination_key,
+      aggregateId: row.aggregate_id,
+      deliveryAttemptCount: row.delivery_attempt_count,
+    });
     const recoveryMessage = controlledRecoveryQueueMessage(row);
     if (recoveryMessage) {
       await this.env.INTAKE_QUEUE.send(recoveryMessage);

@@ -32,6 +32,8 @@ DEPLOYMENT_STAGE = "staging"
 WORKFLOW_A_VERSION = "workflow-a-v1"
 WORKFLOW_B_VERSION = "workflow-b-v1"
 ML_SERVICE_URL = "https://hirebeat-ml-inference-stg-340548608366.us-east1.run.app"
+# Staging-only deterministic acceptance fixtures. Production must omit it.
+ENABLE_STAGING_FAULT_INJECTION = "enabled"
 
 # Set these with `wrangler secret put --config workers/etl-orchestrator/wrangler.toml`:
 # ML_SERVICE_AUTH_TOKEN

@@ -268,6 +268,12 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
 8. Inject a permanent Workflow contract error and verify `NonRetryableError`
    stops immediately. Inject a transient service error and verify the step uses
    no more than the configured total-attempt limit.
+   Staging uses the isolated source IDs
+   `staging-google-fault-workflow-a-terminal-contract-001` and
+   `staging-google-fault-workflow-a-transient-retry-once-001`; both target the
+   Workflow A normalization step after valid initial cleaning. The transient
+   fixture fails only ledger attempt 1, while the contract fixture is converted
+   to `NonRetryableError` and must remain at one attempt.
 
 ### 5A. Isolated missing-JD and stale-waiter acceptance fixture
 
@@ -358,6 +364,11 @@ candidate file.
 9. Verify invalid Outbox JSON/destination becomes terminal immediately, while a
    temporary Workflow API failure uses lease-based jittered backoff and stops at
    the frozen maximum delivery-attempt count.
+   The staging source ID
+   `staging-google-fault-outbox-workflow-create-retry-once-001` fails only the
+   first claimed `raw_submission.published -> workflow_a` delivery. The same
+   Outbox row must later become `published` with delivery count 2 and exactly
+   one Workflow A database run.
 10. Verify an Offer deadline submitted as a summer and winter
     `America/New_York` wall-clock time is normalized with the correct seasonal
     offset. Verify the spring DST gap is rejected and the repeated fall-back

@@ -21,6 +21,7 @@ export interface OrchestratorEnv {
   WORKFLOW_A_VERSION: string;
   WORKFLOW_B_VERSION: string;
   ML_SERVICE_URL: string;
+  ENABLE_STAGING_FAULT_INJECTION?: string;
   ML_SERVICE_AUTH_TOKEN: string;
   CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON: string;
   IDENTITY_HMAC_KEY_V1: string;

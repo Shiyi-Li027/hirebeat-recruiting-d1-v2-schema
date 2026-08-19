@@ -46,6 +46,14 @@ All persisted instants use RFC 3339 UTC. The active versioned configuration decl
 
 Outbox delivery is at least once. A stable `event_uuid` is also the Cloudflare Workflow instance ID. If `create()` succeeded but the Outbox status update was interrupted, redelivery confirms the existing instance with `get()` and `status()` instead of creating a second Workflow or exhausting the event as a false failure.
 
+Deterministic Workflow/Outbox fault fixtures require both
+`DEPLOYMENT_STAGE=staging` and `ENABLE_STAGING_FAULT_INJECTION=enabled`, plus an
+exact reviewed synthetic source record ID. Production configuration must omit
+the enablement variable. The Outbox fixture fails only delivery attempt 1; the
+transient Workflow fixture fails only step attempt 1; the permanent contract
+fixture remains terminal on every attempted execution and crosses the runtime
+boundary as `NonRetryableError`.
+
 Within Workflow A, a retry of Resume extraction or Dedup removes only the same input/version's unpublished partial derivative before rebuilding it. Successful historical results, Raw evidence and shared reference rows are never part of that cleanup. ML input identity includes the Application decision fence, so a manual re-request produces a distinct auditable analysis run while technical retries under the same fence remain idempotent.
 
 ## 2. Runtime packages
