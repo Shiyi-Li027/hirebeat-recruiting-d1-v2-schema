@@ -28,6 +28,17 @@ FAULT_SOURCE_RECORD_IDS = {
     "parser_timeout": "staging-google-fault-parser-timeout-retry-once-001",
     "parser_empty": "staging-google-fault-parser-empty-terminal-001",
 }
+ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS = {
+    "outbox_retry": (
+        "staging-google-fault-outbox-workflow-create-retry-once-001"
+    ),
+    "workflow_transient": (
+        "staging-google-fault-workflow-a-transient-retry-once-001"
+    ),
+    "workflow_terminal": (
+        "staging-google-fault-workflow-a-terminal-contract-001"
+    ),
+}
 
 
 def command(args: list[str]) -> str:
@@ -453,6 +464,109 @@ def main() -> int:
         ORDER BY intake.source_record_id;""",
         True,
     )
+    outbox_retry_source = quote(
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_retry"]
+    )
+    outbox_workflow_retry = execute(
+        f"""SELECT
+          intake.source_record_id,
+          intake.submission_uuid,
+          outbox.id AS outbox_event_id,
+          outbox.event_uuid,
+          outbox.dispatch_status,
+          outbox.delivery_attempt_count,
+          outbox.max_delivery_attempts,
+          outbox.next_attempt_at,
+          outbox.lease_owner,
+          outbox.lease_expires_at,
+          outbox.last_error_code,
+          outbox.published_at,
+          (SELECT COUNT(*) FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a')
+            AS workflow_a_count,
+          (SELECT workflow.workflow_status
+             FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a'
+            ORDER BY workflow.id DESC LIMIT 1) AS workflow_a_status,
+          (SELECT workflow.run_attempt_count
+             FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a'
+            ORDER BY workflow.id DESC LIMIT 1)
+            AS workflow_a_run_attempt_count
+        FROM raw_submission_intake_run AS intake
+        JOIN raw_submission AS raw
+          ON raw.raw_submission_intake_run_id=intake.id
+        JOIN outbox_event AS outbox
+          ON outbox.aggregate_type='raw_submission'
+         AND outbox.aggregate_id=raw.id
+         AND outbox.event_type='raw_submission.published'
+        WHERE intake.source_system='google_form'
+          AND intake.source_record_id={outbox_retry_source};""",
+        True,
+    )
+    workflow_fault_sources = ",".join(
+        quote(ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS[key])
+        for key in ("workflow_transient", "workflow_terminal")
+    )
+    workflow_step_faults = execute(
+        f"""SELECT
+          intake.source_record_id,
+          intake.submission_uuid,
+          workflow.id AS workflow_run_id,
+          workflow.workflow_run_uuid,
+          workflow.workflow_status,
+          workflow.run_attempt_count,
+          workflow.last_error_code AS workflow_last_error_code,
+          workflow.completed_at AS workflow_completed_at,
+          step.id AS step_run_id,
+          step.step_status,
+          step.attempt_count AS step_attempt_count,
+          step.max_attempts AS step_max_attempts,
+          step.last_error_code AS step_last_error_code,
+          (SELECT COUNT(*) FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id) AS total_step_attempt_count,
+          (SELECT COUNT(*) FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id
+              AND attempt.attempt_status='failed_retryable')
+            AS failed_retryable_attempt_count,
+          (SELECT COUNT(*) FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id
+              AND attempt.attempt_status='failed_terminal')
+            AS failed_terminal_attempt_count,
+          (SELECT COUNT(*) FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id
+              AND attempt.attempt_status='succeeded')
+            AS succeeded_attempt_count,
+          (SELECT attempt.error_class FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id
+            ORDER BY attempt.attempt_number LIMIT 1)
+            AS first_attempt_error_class,
+          (SELECT attempt.error_code FROM etl_step_attempt AS attempt
+            WHERE attempt.step_run_id=step.id
+            ORDER BY attempt.attempt_number LIMIT 1)
+            AS first_attempt_error_code,
+          (SELECT COUNT(*) FROM submission_normalized AS normalized
+            WHERE normalized.raw_submission_id=raw.id) AS normalized_count,
+          (SELECT COUNT(*) FROM application_source_lineage AS lineage
+            WHERE lineage.source_raw_submission_id=raw.id)
+            AS application_lineage_count
+        FROM raw_submission_intake_run AS intake
+        JOIN raw_submission AS raw
+          ON raw.raw_submission_intake_run_id=intake.id
+        JOIN etl_workflow_run AS workflow
+          ON workflow.raw_submission_id=raw.id
+         AND workflow.workflow_type='workflow_a'
+        JOIN etl_step_run AS step
+          ON step.workflow_run_id=workflow.id
+         AND step.step_key='normalize_submission'
+        WHERE intake.source_system='google_form'
+          AND intake.source_record_id IN ({workflow_fault_sources})
+        ORDER BY intake.source_record_id;""",
+        True,
+    )
 
     expected_case = {
         "intake_status": "succeeded",
@@ -586,6 +700,64 @@ def main() -> int:
             and empty["normalized_count"] == 0
             and empty["application_lineage_count"] == 0
         )
+    outbox_workflow_retry_passed = len(outbox_workflow_retry) == 1
+    if outbox_workflow_retry_passed:
+        outbox_retry = outbox_workflow_retry[0]
+        outbox_workflow_retry_passed = (
+            outbox_retry["dispatch_status"] == "published"
+            and outbox_retry["delivery_attempt_count"] == 2
+            and outbox_retry["lease_owner"] is None
+            and outbox_retry["lease_expires_at"] is None
+            and outbox_retry["last_error_code"] is None
+            and bool(outbox_retry["published_at"])
+            and outbox_retry["workflow_a_count"] == 1
+            and outbox_retry["workflow_a_status"] == "succeeded"
+            and outbox_retry["workflow_a_run_attempt_count"] == 1
+        )
+    workflow_fault_rows = {
+        row["source_record_id"]: row for row in workflow_step_faults
+    }
+    workflow_step_faults_passed = set(workflow_fault_rows) == {
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["workflow_transient"],
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["workflow_terminal"],
+    }
+    if workflow_step_faults_passed:
+        transient = workflow_fault_rows[
+            ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["workflow_transient"]
+        ]
+        terminal = workflow_fault_rows[
+            ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["workflow_terminal"]
+        ]
+        workflow_step_faults_passed = (
+            transient["workflow_status"] == "succeeded"
+            and transient["run_attempt_count"] == 1
+            and transient["workflow_last_error_code"] is None
+            and transient["step_status"] == "succeeded"
+            and transient["step_attempt_count"] == 2
+            and transient["total_step_attempt_count"] == 2
+            and transient["failed_retryable_attempt_count"] == 1
+            and transient["failed_terminal_attempt_count"] == 0
+            and transient["succeeded_attempt_count"] == 1
+            and transient["first_attempt_error_class"] == "transient"
+            and transient["first_attempt_error_code"]
+            == "staging_fault_workflow_a_transient_service_error"
+            and transient["normalized_count"] == 1
+            and terminal["workflow_status"] == "failed_terminal"
+            and terminal["run_attempt_count"] == 1
+            and terminal["workflow_last_error_code"]
+            == "staging_fault_workflow_contract_configuration_missing"
+            and terminal["step_status"] == "failed_terminal"
+            and terminal["step_attempt_count"] == 1
+            and terminal["total_step_attempt_count"] == 1
+            and terminal["failed_retryable_attempt_count"] == 0
+            and terminal["failed_terminal_attempt_count"] == 1
+            and terminal["succeeded_attempt_count"] == 0
+            and terminal["first_attempt_error_class"] == "terminal"
+            and terminal["first_attempt_error_code"]
+            == "staging_fault_workflow_contract_configuration_missing"
+            and terminal["normalized_count"] == 0
+            and terminal["application_lineage_count"] == 0
+        )
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -628,9 +800,11 @@ def main() -> int:
             malformed_envelope_zero_write_passed
         ),
         "source_parser_fault_injection": source_parser_faults_passed,
+        "outbox_workflow_create_retry_fence": outbox_workflow_retry_passed,
+        "workflow_step_fault_classification": workflow_step_faults_passed,
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v5",
+        "schema_version": "hirebeat-staging-closeout-report-v6",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -644,10 +818,12 @@ def main() -> int:
         "intake_concurrency_evidence": intake_concurrency,
         "malformed_envelope_evidence": malformed_envelope,
         "source_parser_fault_evidence": source_parser_faults,
+        "outbox_workflow_retry_evidence": outbox_workflow_retry,
+        "workflow_step_fault_evidence": workflow_step_faults,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete still-unexecuted Workflow/Outbox retry cases listed in acceptance-plan sections 3, 3A, and 5.",
+            "Complete the still-unexecuted post-Workflow-creation/pre-ack redelivery and invalid Outbox JSON/destination staging cases listed in acceptance-plan sections 5 and 6.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],

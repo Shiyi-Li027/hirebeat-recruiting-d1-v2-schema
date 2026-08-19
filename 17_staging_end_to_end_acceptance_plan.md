@@ -275,6 +275,25 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
    fixture fails only ledger attempt 1, while the contract fixture is converted
    to `NonRetryableError` and must remain at one attempt.
 
+Recorded Staging evidence for item 8 on 2026-08-19:
+
+- `staging-google-fault-workflow-a-transient-retry-once-001` completed one
+  Workflow A database run. Its `normalize_submission` ledger step recorded
+  attempt 1 as `failed_retryable + transient` with
+  `staging_fault_workflow_a_transient_service_error`, then attempt 2 as
+  `succeeded`. The Workflow finished `succeeded`, and exactly one normalized
+  Submission was retained.
+- `staging-google-fault-workflow-a-terminal-contract-001` completed as
+  `failed_terminal` after one Workflow run and one normalization attempt. Both
+  Workflow and step retained
+  `staging_fault_workflow_contract_configuration_missing`; no normalized
+  Submission or Application lineage was created. The Cloudflare tail surfaced
+  the terminal Workflow exception, while the durable ledger proved that no
+  retry or running residue remained.
+- Both fixtures passed `PRAGMA foreign_key_check`. These controls did not
+  modify a Migration, table definition, frozen retry limit, or business row
+  outside their isolated synthetic submissions.
+
 ### 5A. Isolated missing-JD and stale-waiter acceptance fixture
 
 1. Generate `hirebeat-synthetic-jd-waiting-resume.pdf` with
@@ -369,6 +388,22 @@ candidate file.
    first claimed `raw_submission.published -> workflow_a` delivery. The same
    Outbox row must later become `published` with delivery count 2 and exactly
    one Workflow A database run.
+
+Recorded Staging evidence for the temporary-failure portion of item 9 on
+2026-08-19:
+
+- Outbox event `33` for
+  `staging-google-fault-outbox-workflow-create-retry-once-001` failed its first
+  claimed Workflow-create delivery and later became `published` on delivery
+  attempt 2. Its lease owner and expiry were cleared, terminal error state was
+  empty, and the historical `next_attempt_at` retained the backoff evidence.
+- Exactly one Workflow A database run was created from the Outbox event. It
+  completed `succeeded` with one Workflow run attempt. Foreign-key validation
+  returned no rows.
+- This evidence closes the temporary Workflow-API failure/backoff case only.
+  Invalid Outbox JSON/destination and the post-Workflow-creation/pre-Outbox-ack
+  redelivery boundary remain separate staging cases; this result does not mark
+  either of those unexecuted cases complete.
 10. Verify an Offer deadline submitted as a summer and winter
     `America/New_York` wall-clock time is normalized with the correct seasonal
     offset. Verify the spring DST gap is rejected and the repeated fall-back
