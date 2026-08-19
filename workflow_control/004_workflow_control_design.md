@@ -79,7 +79,7 @@ Partial unique index 保证同一时间最多一个 `active` release，同时允
 | `description` | 是 | 参数用途和单位说明 |
 | `created_at` | 否 | 参数行创建时间；发布后参数行按不可变版本使用 |
 
-首个 active release 为 `hirebeat-system-configuration-v1`，包含：Parser timeout 30000 ms、Intake stale 300 秒、Ingress 总尝试 5 次、Resume PDF 最大 10485760 bytes、Workflow step 默认 5 次和 Outbox 最大投递 8 次。
+首个 release 为 `hirebeat-system-configuration-v1`。Migration 0011 发布 `hirebeat-system-configuration-v2` 并将 v1 标记为 `superseded`；v2 保留原有 Parser timeout 30000 ms、Intake stale 300 秒、Ingress 总尝试 5 次、Resume PDF 最大 10485760 bytes、Workflow step 默认 5 次和 Outbox 最大投递 8 次，并增加 `offer.default_response_window_days = 7`。历史 Intake/Workflow 仍读取其冻结的旧 release，新业务命令读取唯一 active release。
 
 ## 2. 顶层 Workflow 边界
 

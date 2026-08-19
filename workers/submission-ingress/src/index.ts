@@ -18,6 +18,12 @@ import { requireInternalAuthentication } from "./services/internal-auth";
 import { WebCryptoPayloadHmacService } from "./services/payload-hmac";
 import { validateCanonicalIntake } from "./validation/canonical-intake-validator";
 import { GoogleServiceAccountCloudRunIdTokenProvider } from "../../shared/google-cloud-run-id-token";
+import { IntakeReplayEnvelopeStore } from "./services/intake-replay-envelope-store";
+import {
+  finalizeDeadLetterBatch,
+  makeIntakeQueueMessage,
+  processIntakeQueueMessage,
+} from "./services/intake-queue-recovery";
 
 const SERVICE_NAME = "hirebeat-submission-ingress";
 const SERVICE_VERSION = "1.0.0-production-ingress";
@@ -116,19 +122,34 @@ function buildProductionService(env: IngressEnv): ProductionIntakeService {
   );
 }
 
-async function receiveCanonical(
+async function enqueueCanonical(
   intake: CanonicalIntakeRequest,
   env: IngressEnv,
   requestId: string,
 ): Promise<Response> {
-  const receipt = await buildProductionService(env).receive(intake);
+  const hmac = await new WebCryptoPayloadHmacService(
+    env.SUBMISSION_HMAC_KEY_V1,
+  ).calculate(intake);
+  const envelopeKey = await new IntakeReplayEnvelopeStore(
+    env.hirebeat_hr_raw_resumes_pdf_r2_v1,
+    env.SOURCE_SCHEMA_VERSION,
+  ).put(intake, hmac.hmacHex);
+  await env.INTAKE_QUEUE.send(
+    makeIntakeQueueMessage({
+      request: intake,
+      acceptedPayloadHmac: hmac.hmacHex,
+      replayEnvelopeKey: envelopeKey,
+      requestId,
+    }),
+  );
   return jsonResponse(
-    { status: receipt.outcome, requestId, ...receipt, writesEnabled: true },
-    receipt.outcome === "succeeded"
-      ? 201
-      : receipt.outcome === "existing_in_progress"
-        ? 202
-        : 200,
+    {
+      status: "queued",
+      submissionUuid: intake.source.submissionUuid,
+      requestId,
+      writesEnabled: true,
+    },
+    202,
   );
 }
 
@@ -182,7 +203,7 @@ export default {
           await readJsonBody(request),
           env.SOURCE_SCHEMA_VERSION,
         );
-        return receiveCanonical(intake, env, requestId);
+        return await enqueueCanonical(intake, env, requestId);
       } catch (error) {
         return safeErrorResponse(error, requestId, true);
       }
@@ -203,7 +224,7 @@ export default {
         const intake = url.pathname.endsWith("airtable")
           ? await adaptAirtableEvent(nativeEvent, adapterOptions)
           : await adaptGoogleFormEvent(nativeEvent, adapterOptions);
-        return receiveCanonical(
+        return await enqueueCanonical(
           validateCanonicalIntake(intake, env.SOURCE_SCHEMA_VERSION),
           env,
           requestId,
@@ -214,5 +235,23 @@ export default {
     }
 
     return jsonResponse({ error: "not_found" }, 404);
+  },
+
+  async queue(batch: MessageBatch<unknown>, env: IngressEnv): Promise<void> {
+    if(batch.queue==="hirebeat-submission-intake-dlq-stg-v1"){
+      await finalizeDeadLetterBatch(env.DB,batch);
+      return;
+    }
+    const store = new IntakeReplayEnvelopeStore(
+      env.hirebeat_hr_raw_resumes_pdf_r2_v1,
+      env.SOURCE_SCHEMA_VERSION,
+    );
+    const hmac = new WebCryptoPayloadHmacService(env.SUBMISSION_HMAC_KEY_V1);
+    const intake = buildProductionService(env);
+    await Promise.all(
+      batch.messages.map((message) =>
+        processIntakeQueueMessage({ message, store, hmac, intake }),
+      ),
+    );
   },
 } satisfies ExportedHandler<IngressEnv>;

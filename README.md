@@ -6,9 +6,9 @@ Versioned Cloudflare D1 schema, migration, validation, and GitHub Actions deploy
 
 ## Project status / 项目状态
 
-This repository contains the confirmed schema and the first complete production implementation boundary for HireBeat's real-time recruiting pipeline: authenticated Airtable/Google intake, private R2 PDF preservation, PDF parsing, atomic Raw publication, Outbox dispatch, Workflow A, Workflow B, ML inference, hiring decision, Offer draft/version/lifecycle commands, and protected Catalog operations.
+This repository contains the confirmed schema and the first complete production implementation boundary for HireBeat's real-time recruiting pipeline: authenticated Airtable/Google intake, Queue/DLQ recovery, private R2 PDF preservation, PDF parsing, atomic Raw publication, Outbox dispatch, Workflow A, Workflow B, scheduled reconciliation, ML inference, hiring decision, Offer draft/version/lifecycle commands, and protected Catalog operations.
 
-本仓库包含 HireBeat 新版招聘数据库已经确认的 Schema，以及第一版完整生产实现边界：Airtable/Google 认证接入、私有 R2 PDF 留存、PDF 解析、Raw 原子发布、Outbox、Workflow A、Workflow B、ML 推理、招聘决定、Offer draft/version/lifecycle command 与受保护的 Catalog Operations API。
+本仓库包含 HireBeat 新版招聘数据库已经确认的 Schema，以及第一版完整生产实现边界：Airtable/Google 认证接入、Queue/DLQ 自动恢复、私有 R2 PDF 留存、PDF 解析、Raw 原子发布、Outbox、Workflow A、Workflow B、定时 Reconciler、ML 推理、招聘决定、Offer draft/version/lifecycle command 与受保护的 Catalog Operations API。
 
 Current verified baseline:
 
@@ -122,6 +122,7 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
   plus Position JD.
 - Shared entities such as Company, Position, Skill, School, and Person are not deleted by a failed application workflow.
 - Reliable asynchronous handoffs use the Outbox pattern. SQL triggers are not used for workflow orchestration; the narrow Position trigger only protects the local invariant that an Active Position must have a usable JD.
+- Automatic recovery uses the owning platform primitive: Queue/DLQ for Intake delivery, Workflows for step retries, Outbox leases for committed handoffs, scheduled reconciliation for durable business waits/deadlines, and decision fences for stale-work cancellation. See [`18_automatic_recovery_policy.md`](18_automatic_recovery_policy.md).
 - Destructive cleanup is never part of automatic migrations or GitHub Actions.
 
 ## Repository structure / 仓库结构
@@ -165,6 +166,7 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 ├── 15_production_implementation_runbook.md
 ├── 16_runtime_three_way_comparison.md
 ├── 17_staging_end_to_end_acceptance_plan.md
+├── 18_automatic_recovery_policy.md
 ├── wrangler.toml
 ├── package.json
 ├── DEPLOYMENT_GUIDE.md
@@ -225,7 +227,7 @@ PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/te
 Expected result:
 
 ```text
-Schema validation succeeded: 10 migrations, 84 tables, 120 explicit indexes, 0 FK violations.
+Schema validation succeeded: 11 migrations, 84 tables, 120 explicit indexes, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库

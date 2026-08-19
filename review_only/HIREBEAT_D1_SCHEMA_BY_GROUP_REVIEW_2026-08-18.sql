@@ -6,7 +6,7 @@
 -- REVIEW ONLY — DO NOT DEPLOY THIS FILE.
 --
 -- This standalone file exists only for human inspection and reconciliation.
--- The authoritative deployment history remains migrations/0001 through 0009.
+-- The authoritative deployment history remains migrations/0001 through 0011.
 -- Do not add this file to Wrangler migrations, GitHub deployment workflows,
 -- Worker startup code, or any production/staging database execution command.
 --
@@ -17,11 +17,11 @@
 --   11 confirmed business groups
 --   84 application tables
 --   120 explicit indexes
---   current structural effects of migrations 0001-0009
+--   current structural effects of migrations 0001-0011
 --
 -- Exclusions:
 --   Seed/reference rows are intentionally excluded. Seed data is owned by
---   migrations 0004, 0006 and 0007 and is not part of table structure review.
+--   migrations 0004, 0006, 0007 and 0011 and is not part of table structure review.
 --   Cloudflare-managed tables such as d1_migrations are also excluded.
 --
 -- Group inventory:
@@ -3575,6 +3575,43 @@ CREATE TABLE offer_version (
     OR employment_end_date >= employment_start_date
   )
 );
+
+-- Drafts may omit a response deadline. Once an Offer enters sent, its current
+-- immutable version must carry a parseable deadline later than the transition.
+-- The Operations API derives a new version from the active configuration when
+-- the recruiter did not explicitly provide one; these triggers are the final
+-- database-side defense for direct SQL and future writers.
+CREATE TRIGGER trg_offer_sent_requires_future_response_due_insert
+BEFORE INSERT ON offer
+FOR EACH ROW
+WHEN NEW.current_status = 'sent'
+ AND NOT EXISTS (
+   SELECT 1 FROM offer_version AS version
+   WHERE version.id = NEW.current_offer_version_id
+     AND version.offer_id = NEW.id
+     AND version.response_due_at IS NOT NULL
+     AND julianday(version.response_due_at) IS NOT NULL
+     AND julianday(version.response_due_at) > julianday('now')
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'future_response_due_at_required_for_sent_offer');
+END;
+
+CREATE TRIGGER trg_offer_sent_requires_future_response_due_update
+BEFORE UPDATE OF current_status, current_offer_version_id ON offer
+FOR EACH ROW
+WHEN NEW.current_status = 'sent'
+ AND NOT EXISTS (
+   SELECT 1 FROM offer_version AS version
+   WHERE version.id = NEW.current_offer_version_id
+     AND version.offer_id = NEW.id
+     AND version.response_due_at IS NOT NULL
+     AND julianday(version.response_due_at) IS NOT NULL
+     AND julianday(version.response_due_at) > julianday('now')
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'future_response_due_at_required_for_sent_offer');
+END;
 
 -- One immutable row per lifecycle transition. offer.current_status is a query
 -- cache; this history is the auditable record of how that state changed.

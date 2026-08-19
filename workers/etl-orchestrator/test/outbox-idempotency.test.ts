@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createOrConfirmWorkflow } from "../src/outbox-dispatcher";
+import { createOrConfirmWorkflow, nextAttemptAt } from "../src/outbox-dispatcher";
 
 async function createSuccess(): Promise<void> {
   let creates=0;
@@ -40,4 +40,9 @@ async function unknownInstancePreservesCreateError(): Promise<void> {
 await createSuccess();
 await duplicateCreateIsConfirmed();
 await unknownInstancePreservesCreateError();
+const before=Date.now();
+const low=Date.parse(nextAttemptAt(1,()=>0));
+const high=Date.parse(nextAttemptAt(1,()=>1));
+assert.ok(low>=before+3_900&&low<=before+4_100);
+assert.ok(high>=before+5_900&&high<=before+6_100);
 console.log("Outbox Workflow instance idempotency tests passed.");

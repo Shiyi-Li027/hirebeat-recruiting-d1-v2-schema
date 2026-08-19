@@ -1,6 +1,7 @@
 export interface IngressEnv {
   DB: D1Database;
   hirebeat_hr_raw_resumes_pdf_r2_v1: R2Bucket;
+  INTAKE_QUEUE: Queue;
 
   DEPLOYMENT_STAGE: string;
   SOURCE_SCHEMA_VERSION: string;

@@ -49,7 +49,7 @@ Application Publish 完成后需要启动 Workflow B：
 写入 1 条 audit_event(application_decision_overridden)
 ```
 
-例如 `hirebeat-system-configuration-v1` 是当前生效的整套规则；其中分别保存 Parser 30 秒超时、Intake 5 分钟 stale、最多 5 次处理等参数。一次 Intake 或 Workflow 启动后冻结所采用的 release，重试过程中不会静默换成新版规则。
+例如首个 release `hirebeat-system-configuration-v1` 保存 Parser 30 秒超时、Intake 5 分钟 stale、最多 5 次处理等参数；当前 active 的 v2 继承这些参数，并增加 Offer 默认回复期限 7 天。一次 Intake 或 Workflow 启动后冻结所采用的 release，重试过程中不会静默换成新版规则。
 
 ## 2. Outbox 为什么能够启动 Workflow
 

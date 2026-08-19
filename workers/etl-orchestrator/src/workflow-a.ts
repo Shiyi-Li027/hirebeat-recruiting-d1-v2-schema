@@ -8,6 +8,7 @@ import { publishApplicationCore, type CorePublishResult } from "./workflow-a-pub
 import { tracked, WorkflowLedger, type WorkflowRunIdentity } from "./workflow-ledger";
 import { loadOrchestratorConfiguration } from "./runtime-configuration";
 import { compensateWorkflowAStaging } from "./workflow-a-compensation";
+import { toWorkflowThrowable } from "./workflow-errors";
 
 const WORKFLOW_A_STEP_VERSION = "workflow-a-step-v1";
 
@@ -39,11 +40,12 @@ export async function executeWorkflowA(
   const payload = event.payload;
   const configuration=await step.do("load-workflow-a-configuration",()=>loadOrchestratorConfiguration(env.DB,payload.configurationReleaseId));
   const doConfigured=<T>(name:string,callback:()=>Promise<T>):Promise<T>=>step.do(name,{
-    // Cloudflare `limit` counts retries after the first call; the database
-    // configuration counts total attempts.
-    retries:{limit:Math.max(0,configuration.defaultStepMaxAttempts-1),delay:"1 second",backoff:"exponential"},
+    // Cloudflare `limit` is the total number of attempts, including the first.
+    retries:{limit:Math.max(1,configuration.defaultStepMaxAttempts),delay:"1 second",backoff:"exponential"},
     timeout:"10 minutes",
-  },callback);
+  },async()=>{
+    try{return await callback();}catch(error){throw toWorkflowThrowable(error);}
+  });
   const run = await doConfigured("register-workflow-a", () => workflowRun(env, payload));
   const ledger = new WorkflowLedger(env.DB,configuration.defaultStepMaxAttempts);
 

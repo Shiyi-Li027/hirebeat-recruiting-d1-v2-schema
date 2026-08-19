@@ -5,6 +5,7 @@ import { OutboxDispatcher } from "./outbox-dispatcher";
 import { executeWorkflowA } from "./workflow-a";
 import { executeWorkflowB } from "./workflow-b";
 import { requireInternalToken } from "./internal-auth";
+import { reconcileOperationalState } from "./reconciler";
 
 export class WorkflowA extends WorkflowEntrypoint<OrchestratorEnv, WorkflowAParams> {
   async run(event: WorkflowEvent<WorkflowAParams>, step: WorkflowStep): Promise<void> {
@@ -20,6 +21,7 @@ export class WorkflowB extends WorkflowEntrypoint<OrchestratorEnv, WorkflowBPara
 
 export default {
   async scheduled(_controller: ScheduledController, env: OrchestratorEnv): Promise<void> {
+    await reconcileOperationalState(env.DB);
     await new OutboxDispatcher(env).dispatchAvailable();
   },
   async fetch(request: Request, env: OrchestratorEnv): Promise<Response> {
@@ -33,8 +35,9 @@ export default {
       } catch {
         return Response.json({error:"unauthorized"},{status:401});
       }
+      const reconciled=await reconcileOperationalState(env.DB);
       const count = await new OutboxDispatcher(env).dispatchAvailable();
-      return Response.json({ dispatched: count });
+      return Response.json({ reconciled,dispatched: count });
     }
     return Response.json({ error: "not_found" }, { status: 404 });
   },

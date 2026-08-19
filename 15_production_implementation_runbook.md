@@ -26,7 +26,13 @@ Airtable Automation / Google Apps Script
 
 All child entity sets allow zero rows. ML receives only complete `resume_text` and `position_jd`; it does not require Education, Employment, Skill, or Project rows. The frozen anomaly rules remain separate from cosine similarity.
 
-The active `workflow.default_step_max_attempts` value counts the original call plus retries. The Workflow adapter converts it to Cloudflare's retry-limit convention (`configured total - 1`), uses exponential backoff from one second, and applies a ten-minute per-step timeout. ML and Parser HTTP calls additionally enforce their shorter 30-second request timeout.
+The active `workflow.default_step_max_attempts` value counts total attempts, including the original call. Cloudflare Workflows gives `retries.limit` the same total-attempt meaning, so the adapter passes the configured value directly, uses exponential backoff from one second, and applies a ten-minute per-step timeout. Permanent validation, configuration and stale-fence failures stop immediately through `NonRetryableError`. ML and Parser HTTP calls additionally enforce their shorter 30-second request timeout.
+
+Submission intake is asynchronous. The authenticated HTTP route validates the source envelope, stores a private integrity-checked replay envelope in R2, publishes only its pointer and keyed HMAC to `hirebeat-submission-intake-stg-v1`, and returns HTTP 202. Queue `max_retries = 4` means one initial delivery plus four redeliveries, matching the frozen maximum of five total intake attempts. Retryable failures use jittered backoff; terminal failures are acknowledged immediately. Exhausted messages move to `hirebeat-submission-intake-dlq-stg-v1`, whose consumer automatically marks the D1 run `failed_terminal`.
+
+The one-minute orchestrator schedule also runs a bounded idempotent reconciler before Outbox dispatch. It requeues only current `processing + pending` Applications whose Position JD has become ready, so superseded/cancelled Applications cannot be revived. It also expires sent/viewed Offers whose current immutable Offer version has passed `response_due_at`, appending Offer status history and an audit event.
+
+An Offer version may omit `response_due_at` while it is a Draft. The Operations API normalizes explicit deadlines to RFC 3339 UTC and rejects invalid or non-future values. On the `sent` transition, an explicit future deadline is retained; if it is absent, the API reads `offer.default_response_window_days` from the active versioned configuration, calculates the deadline from the actual send instant, derives a new immutable Offer version, points the Offer to it, and transitions the status in one short D1 batch. Database triggers reject any direct writer that attempts to enter `sent` without a parseable future deadline.
 
 Outbox delivery is at least once. A stable `event_uuid` is also the Cloudflare Workflow instance ID. If `create()` succeeded but the Outbox status update was interrupted, redelivery confirms the existing instance with `get()` and `status()` instead of creating a second Workflow or exhausting the event as a false failure.
 
@@ -76,6 +82,32 @@ Reference and Catalog authoring endpoints include:
 - `PATCH /v1/reference/{type}/{id}/active-state` for controlled Reference activation/deactivation;
 - `GET /v1/catalog/child-types` and `POST /v1/catalog/children/{type}` for the remaining G02 child tables;
 - `PATCH /v1/catalog/children/{type}/{id}/active-state` for G02 child state changes;
+
+For the first reviewed staging Catalog path, generate the ignored private
+preflight output and use the dry-run-first importer:
+
+```bash
+npm run data:preflight
+npm run data:seed:staging
+```
+
+After reviewing the selected source row, JD hash/length, Work Mode and stable
+idempotency keys, explicitly apply it:
+
+```bash
+python3 scripts/import_reviewed_staging_catalog_seed.py \
+  --apply \
+  --confirm "ags logistics|operations data analyst (on-site)"
+```
+
+The apply path delegates requests to the official `cloudflared access curl`
+wrapper, which uses the operator's short-lived Access session without the
+importer printing or persisting its JWT. The four mutations
+(Company, Company Work Mode, Position and Catalog revision) each use a stable
+idempotency key, so an interrupted command can be safely rerun. This is a
+reviewed staging bootstrap, not a bulk auto-approval mechanism for ambiguous
+private source rows.
+
 - records with `is_active` default to active unless an authoring command explicitly supplies `false` or `0`;
 - Position defaults to `active` only when its JD passes the 10-character readiness gate; otherwise it defaults to `draft`.
 - A later Position update that supplies a ready JD requeues every matching

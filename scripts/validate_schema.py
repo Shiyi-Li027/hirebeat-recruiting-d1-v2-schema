@@ -21,6 +21,8 @@ STATUS_POLICY = ROOT / "schema/status_field_policy.csv"
 EXPECTED_TABLE_COUNT = 84
 EXPECTED_INDEX_COUNT = 120
 ALLOWED_TRIGGER_NAMES = {
+    "trg_offer_sent_requires_future_response_due_insert",
+    "trg_offer_sent_requires_future_response_due_update",
     "trg_position_active_requires_jd_insert",
     "trg_position_active_requires_jd_update",
 }
@@ -33,6 +35,7 @@ ALLOWED_STATUS_STRATEGIES = {
 }
 EXPECTED_SYSTEM_CONFIGURATION = {
     ("ml_inference", "request_timeout_ms"): "30000",
+    ("offer", "default_response_window_days"): "7",
     ("outbox", "max_delivery_attempts"): "8",
     ("submission_ingress", "active_stale_seconds"): "300",
     ("submission_ingress", "max_attempts"): "5",
@@ -200,9 +203,9 @@ def validate(check_config: bool) -> None:
         )
     if violations:
         raise SystemExit(f"Schema validation failed: FK violations {violations[:20]}")
-    if active_releases != [("hirebeat-system-configuration-v1", 1)]:
+    if active_releases != [("hirebeat-system-configuration-v2", 2)]:
         raise SystemExit(
-            "Schema validation failed: expected exactly one active bootstrap "
+            "Schema validation failed: expected exactly one active current "
             f"configuration release, found {active_releases}."
         )
     if configuration_items != EXPECTED_SYSTEM_CONFIGURATION:

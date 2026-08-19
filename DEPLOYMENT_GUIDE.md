@@ -456,3 +456,39 @@ npx wrangler d1 execute DB --remote \
 ### migration 中途失败
 
 D1 会回滚当前失败 migration；此前已经成功的 migration 保留。修复 SQL 后不要复用一个已成功登记的 migration 名称，而应根据实际状态决定修复当前未成功文件或创建后续 migration。
+
+## 15. Intake Queue 与 DLQ
+
+部署新版 Ingress Worker 前一次性创建两个 staging Queue：
+
+```bash
+npx wrangler queues create hirebeat-submission-intake-stg-v1
+npx wrangler queues create hirebeat-submission-intake-dlq-stg-v1
+```
+
+主 Queue 配置 `max_retries = 4`，表示首次投递加四次重投，共五次。DLQ 由同一个 Ingress Worker 消费，但只负责把已耗尽的 D1 intake run 自动终结，不重复下载 PDF 或调用 Parser。部署输出必须同时显示 `INTAKE_QUEUE` producer、主 Queue consumer 和 DLQ consumer。Queue 只携带私有 R2 replay envelope 的指针与 keyed HMAC，不携带完整申请内容或 PDF bytes。
+
+创建后核对资源并重新部署 Ingress/Orchestrator：
+
+```bash
+npx wrangler queues list
+npm run ingress:deploy:staging
+npm run orchestrator:deploy:staging
+```
+
+Ingress 部署输出必须显示 `INTAKE_QUEUE` binding。提交接口成功接收时返回
+HTTP `202`，这只表示 replay envelope 已安全保存并进入 Queue，不表示 PDF、
+Parser、Raw publication、Workflow A/B 已同步完成。后续状态应查询 D1：
+
+```bash
+npx wrangler d1 execute DB --remote --command \
+  "SELECT submission_uuid,intake_status,attempt_count,
+          technical_redelivery_count,last_error_code,updated_at
+   FROM raw_submission_intake_run
+   ORDER BY id DESC LIMIT 20;"
+```
+
+正常重试不需要人工再次运行提交脚本。只有输入、权限、Secret、字段映射或
+程序本身必须改变时才进行修复；修复前不得删除 Raw、run、Outbox 或审计证据。
+完整分类、上限和自动唤醒规则见
+`18_automatic_recovery_policy.md`。

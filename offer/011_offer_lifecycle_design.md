@@ -118,7 +118,7 @@ work_duration_snapshot
 - `compensation_currency_code`：三位大写货币代码。
 - `compensation_period`：hour/day/week/month/year/project。
 - `signing_bonus_minor_units`、`target_bonus_description`、`equity_description`：可选补充条款。
-- `response_due_at`：候选人回复期限。
+- `response_due_at`：候选人回复期限。Draft 阶段允许 `NULL`；显式值必须是合法 RFC 3339 时间并在发送时仍晚于实际发送时间。
 - `offer_terms_json`：尚未独立结构化的少量扩展条款，必须是合法 JSON。
 - `prepared_by_type/reference`：谁准备该版本。
 - `created_at`：版本创建时间；没有 `updated_at`，因为版本不可变。
@@ -153,6 +153,10 @@ viewed → accepted / declined / expired / withdrawn
 ```
 
 `accepted`、`declined`、`expired`、`withdrawn`、`cancelled` 是终态。首版不支持自动 reopening。`ready_to_send` 及后续必须指向实际 Offer version。
+
+Offer 进入 `sent` 时，当前版本必须具有合法且晚于实际发送时刻的 `response_due_at`。招聘人员明确填写的期限优先；若当前版本没有期限，Operations API 从 active `system_configuration` 读取 `offer.default_response_window_days`，以实际发送时刻加该天数生成期限。首版默认值为 7 天。
+
+因为 `offer_version` 不可变，系统不会把默认期限 UPDATE 回原版本，而是在同一个短事务内派生 `version_no + 1` 的新版本、更新 `offer.current_offer_version_id`，再进入 `sent`。期限以后发生改变时也必须创建新版本。数据库 Trigger 是直接 SQL 和未来写入者的最后防线，禁止没有未来期限的 Offer 进入 `sent`。
 
 ## 9. `offer_status_history`
 

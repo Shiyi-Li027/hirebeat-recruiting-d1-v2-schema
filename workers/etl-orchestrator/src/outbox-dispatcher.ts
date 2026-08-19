@@ -15,13 +15,19 @@ interface OutboxRow {
   max_delivery_attempts: number;
 }
 
-function nextAttemptAt(attempt: number): string {
-  const seconds = Math.min(900, 2 ** Math.min(attempt, 9));
+function nextAttemptAt(attempt: number, random = Math.random): string {
+  const baseSeconds = Math.min(900, 5 * 2 ** Math.min(Math.max(0, attempt - 1), 8));
+  const seconds = Math.max(1, Math.round(baseSeconds * (0.8 + random() * 0.4)));
   return new Date(Date.now() + seconds * 1_000).toISOString();
 }
 
 function safeErrorCode(error: unknown): string {
-  return error instanceof Error ? error.name : "unknown_dispatch_error";
+  if (error instanceof OutboxDispatchError) return error.code;
+  return error instanceof Error ? error.name.slice(0,120) : "unknown_dispatch_error";
+}
+
+class OutboxDispatchError extends Error {
+  constructor(readonly code:string,readonly retryable:boolean){super(code);this.name="OutboxDispatchError";}
 }
 
 export async function createOrConfirmWorkflow<PARAMS>(
@@ -83,7 +89,9 @@ export class OutboxDispatcher {
   }
 
   private async publish(row: OutboxRow): Promise<void> {
-    const payload = JSON.parse(row.event_payload_json) as Record<string, unknown>;
+    let payload:Record<string,unknown>;
+    try{payload=JSON.parse(row.event_payload_json) as Record<string,unknown>;}
+    catch{throw new OutboxDispatchError("outbox_payload_json_invalid",false);}
     if (
       row.event_type === "raw_submission.published" &&
       row.destination_key === "workflow_a"
@@ -97,7 +105,7 @@ export class OutboxDispatcher {
       )
         .bind(row.aggregate_id)
         .first<{ configuration_release_id: number }>();
-      if (!configuration) throw new Error("raw_submission_configuration_missing");
+      if (!configuration) throw new OutboxDispatchError("raw_submission_configuration_missing",false);
       const params: WorkflowAParams = {
         outboxEventId: row.id,
         rawSubmissionId: row.aggregate_id,
@@ -120,7 +128,7 @@ export class OutboxDispatcher {
         !Number.isSafeInteger(candidateSnapshotId) ||
         !Number.isSafeInteger(configurationReleaseId) ||
         decisionFenceToken.length === 0
-      ) throw new Error("workflow_b_event_payload_invalid");
+      ) throw new OutboxDispatchError("workflow_b_event_payload_invalid",false);
       const params: WorkflowBParams = {
         outboxEventId: row.id,
         applicationId,
@@ -140,7 +148,7 @@ export class OutboxDispatcher {
       // Release 1 intentionally acknowledges it without an external side effect.
       return;
     }
-    throw new Error(`unsupported_outbox_destination:${row.event_type}`);
+    throw new OutboxDispatchError(`unsupported_outbox_destination:${row.event_type}`.slice(0,120),false);
   }
 
   async dispatchAvailable(maximumEvents = 25): Promise<number> {
@@ -164,7 +172,9 @@ export class OutboxDispatcher {
           .run();
         dispatched += 1;
       } catch (error) {
+        const retryable = !(error instanceof OutboxDispatchError) || error.retryable;
         const exhausted = row.delivery_attempt_count >= row.max_delivery_attempts;
+        const terminal = exhausted || !retryable;
         const now = new Date().toISOString();
         await this.env.DB.prepare(
           `UPDATE outbox_event
@@ -180,10 +190,14 @@ export class OutboxDispatcher {
           .bind(
             row.id,
             owner,
-            exhausted ? "failed_terminal" : "failed_retryable",
-            exhausted ? null : nextAttemptAt(row.delivery_attempt_count),
+            terminal ? "failed_terminal" : "failed_retryable",
+            terminal ? null : nextAttemptAt(row.delivery_attempt_count),
             safeErrorCode(error),
-            "Outbox destination did not accept the event.",
+            terminal && !retryable
+              ? "Outbox event is permanently invalid and was not retried."
+              : exhausted
+                ? "Outbox delivery exhausted its configured attempt limit."
+                : "Outbox destination temporarily did not accept the event.",
             now,
           )
           .run();
@@ -192,3 +206,5 @@ export class OutboxDispatcher {
     return dispatched;
   }
 }
+
+export { nextAttemptAt };

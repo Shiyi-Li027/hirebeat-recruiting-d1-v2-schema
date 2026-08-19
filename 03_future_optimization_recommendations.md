@@ -137,3 +137,86 @@ Parser timeout = 正常成功请求的 p99 延迟 + 安全余量
 - 多个 Worker 或管理工具需要原子切换到同一版 Reference 数据。
 
 未来设计应优先采用“一次发布对应一个不可变 release”，并在 `etl_workflow_run` 或具体 extraction run 冻结 `reference_data_release_id`，而不是为 21 张表分别建立互不协调的版本号。旧 release 保留用于审计和复现；新业务只读取 active release。Reference release 不替代 G02 的 `catalog_revision`：前者管理共享分类和人才词汇，后者管理可提交的 Company、Company Work Mode 与 Position 选项快照。
+
+## 11. 外部 Reference/Catalog 来源身份与 Source-aware Upsert
+
+首版暂不建设 Airtable、Google Form/Sheets 或其他外部系统的 G01 Reference、G02 Company/Position 管理提交窗口和自动同步流程，因此不提前创建 `company_source_identity`、`position_source_identity`，也不实现通用 source-aware upsert。当前受控管理路径继续使用 Operations API 的显式 `POST`/`PATCH`、内部稳定 UUID、命令幂等键、`audit_event` 和 `catalog_revision`。
+
+只有未来确认外部 Catalog/Reference 同步渠道、能够取得可靠的来源记录身份，并明确字段所有权后，才通过新 migration 增加来源映射。建议的核心信息包括：
+
+```text
+source_system
+source_record_id
+company_id / position_id
+first_seen_at
+last_seen_at
+source_payload_hmac
+```
+
+来源映射必须至少具有：
+
+```text
+UNIQUE(source_system, source_record_id)
+```
+
+未来 importer 的固定处理顺序应为：
+
+```text
+使用 source_system + source_record_id 查询来源映射
+→ 不存在：创建正式实体，并在同一短事务建立来源映射
+→ 已存在：读取正式实体并比较规范化字段
+    → 无变化：返回 unchanged，只更新必要的 last_seen 信息
+    → 有变化：按字段所有权和业务规则 PATCH 原实体
+→ 写入重要更新 audit_event
+→ 只有有效 Catalog 选项快照变化时发布 catalog_revision
+```
+
+并发首次导入必须依赖来源唯一约束：两个 writer 同时创建同一来源映射时，只允许一个成功；另一个捕获唯一冲突后重新查询并转为复用或更新，不能创建重复实体。
+
+`normalized_company_name`、`normalized_position_name` 只用于检索、候选匹配和人工排重，不能代替来源身份。公司可能改名，同一公司可能存在同名岗位，名称的拼写与标点也可能变化。接入前还必须明确“同一来源记录发生名称变化”究竟是原实体重命名，还是来源错误地复用了记录；不能让数据库仅凭内容相似度自行覆盖。
+
+该 deferred 能力不适用于 `raw_submission` 的静默覆盖。Submission Ingress 已使用 `submission_uuid`、`source_event_key` 和 `source_system + source_record_id` 识别同一来源事件；同一来源身份携带不同 payload 时应记录冲突或显式产生新修订/事件，不能重写原始申请证据。
+
+### 外部 Catalog 同步的目标级 Queue / Outbox
+
+将来正式启用 Airtable、Google Form 或其他 Catalog external sync 时，应为每个实际同步目标建立独立 Queue 或 Outbox 投递记录，而不是用一条全局成功状态代表全部渠道。每条目标记录冻结 `catalog_revision_id`、目标系统与表单/视图身份、幂等键、attempt、lease、next attempt 和最终状态。Airtable 成功但 Google 失败时只重试 Google；429、5xx 和网络错误自动退避，权限、字段映射、目标删除等永久错误直接 terminal/DLQ。该能力届时通过新 migration 增加，当前版本不提前创建来源窗口或目标表。
+
+该未来能力还必须遵守当前自动恢复策略的共同语义：`max_attempts`
+表示包括首次在内的总尝试次数；每个目标独立幂等、独立 lease、独立退避、
+独立 terminal 状态；不能因为一个目标失败而回滚已经成功的其他目标，也不能
+通过删除 `catalog_revision` 来“回滚”外部系统。恢复方式应是重试失败目标或发布
+新的 revision/补偿事件。具体设计在外部同步渠道真正启用时再通过新 migration
+与独立验收用例落地。
+
+## 12. Offer 回复期限治理与自动过期门禁
+
+首版继续保留 `offer_version.response_due_at` 为 nullable，不设置数据库
+`DEFAULT`，也不使用硬编码的固定回复期限。Draft Offer 在条款尚未确定时可以
+没有回复截止时间；当前 scheduled reconciler 只会自动过期当前版本具有
+`response_due_at`、且状态为 `sent` 或 `viewed` 的 Offer。`response_due_at IS
+NULL` 的 Offer 不会被自动变为 `expired`。
+
+以下增强明确延期，不作为当前数据库、Ingress、Workflow A/B、ML、Offer draft
+或其他日常流程成功运行的前置条件：
+
+- Offer 进入 `sent` 前，要求当前 Offer version 具有合法的
+  `response_due_at`；
+- Operations API 严格验证该值为 RFC 3339 UTC timestamp，并要求它晚于实际
+  发送时间；
+- 回复期限优先由授权招聘人员明确选择；
+- 未显式选择时，根据已激活且已冻结的 Offer policy/configuration 自动计算，
+  例如 `sent_at + default_offer_response_window_days`；
+- 默认天数进入版本化业务政策或 `system_configuration`，不得硬编码在 Worker，
+  也不得设置成 Schema 的固定日期默认值；
+- 截止时间发生变化时创建新的 immutable `offer_version`，并更新
+  `offer.current_offer_version_id`，不得 UPDATE 已发布的旧版本；
+- 增加发送门禁、无截止时间 Offer 的监控指标，以及合法/非法/过去时间/时区边界
+  的自动化验收用例。
+
+在上述增强落地前，业务和操作边界必须明确：创建或发送 Offer 的调用方负责提供
+正确的绝对截止时间；未提供时系统不会自动过期；当前 API 尚不能把任意非空字符串
+完全证明为合法时间，因此只有受控调用方应写入该字段。此延期不会破坏当前数据库
+事务、状态机或 Workflow 的正常执行，但会留下“已发送且没有截止时间的 Offer
+长期保持 `sent`/`viewed`”以及格式错误导致自动过期不可靠的业务治理风险。该风险
+属于 Offer 生命周期完整性问题，不应被解释为 Candidate、Application 或 ML 处理
+失败。

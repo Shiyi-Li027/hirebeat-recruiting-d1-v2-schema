@@ -104,3 +104,5 @@ raw-resumes/v1/{submission_uuid}/{resume_file_sha256}.pdf
 
 R2 uses a conditional create. A technical redelivery reuses an existing object
 only after its size and SHA-256 metadata match; it never blindly overwrites the key.
+
+The production intake endpoint returns `202 queued` after authentication, validation and private replay-envelope persistence. `hirebeat-submission-intake-stg-v1` then performs PDF acquisition, R2 PDF storage, Parser execution and atomic Raw publication. With `max_retries = 4`, the platform performs at most five total deliveries. Only transient network, 429, 5xx and service-unavailable failures retry; invalid content, authentication and integrity failures stop immediately. The DLQ consumer automatically marks an exhausted retryable run `failed_terminal`.

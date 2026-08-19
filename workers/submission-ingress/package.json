@@ -6,7 +6,7 @@
   "scripts": {
     "types": "wrangler types worker-configuration.d.ts --config wrangler.toml",
     "typecheck": "npm run types && tsc --noEmit",
-    "test:unit": "esbuild test/unit/resume-acquisition.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-resume-acquisition-test.mjs && node /tmp/hirebeat-resume-acquisition-test.mjs && esbuild test/unit/parser-client.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-parser-client-test.mjs && node /tmp/hirebeat-parser-client-test.mjs && rm -f /tmp/hirebeat-resume-acquisition-test.mjs /tmp/hirebeat-parser-client-test.mjs",
+    "test:unit": "esbuild test/unit/resume-acquisition.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-resume-acquisition-test.mjs && node /tmp/hirebeat-resume-acquisition-test.mjs && esbuild test/unit/parser-client.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-parser-client-test.mjs && node /tmp/hirebeat-parser-client-test.mjs && esbuild test/unit/route-error-boundary.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-route-error-boundary-test.mjs && node /tmp/hirebeat-route-error-boundary-test.mjs && esbuild test/unit/intake-queue-recovery.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-intake-queue-recovery-test.mjs && node /tmp/hirebeat-intake-queue-recovery-test.mjs && rm -f /tmp/hirebeat-resume-acquisition-test.mjs /tmp/hirebeat-parser-client-test.mjs /tmp/hirebeat-route-error-boundary-test.mjs /tmp/hirebeat-intake-queue-recovery-test.mjs",
     "dev": "wrangler dev --config wrangler.toml",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml"
   },

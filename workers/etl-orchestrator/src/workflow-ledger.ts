@@ -1,4 +1,5 @@
 import { safeErrorCode } from "./crypto";
+import { classifyWorkflowError } from "./workflow-errors";
 
 export interface WorkflowRunIdentity {
   id: number;
@@ -126,16 +127,29 @@ export class WorkflowLedger {
   async failStep(identity: StepIdentity, error: unknown): Promise<void> {
     const now = new Date().toISOString();
     const code = safeErrorCode(error);
+    const terminal = classifyWorkflowError(error) === "terminal";
     await this.db.batch([
       this.db.prepare(
-        `UPDATE etl_step_attempt SET attempt_status='failed_retryable',error_class='transient',
-         error_code=?2,error_detail=?2,finished_at=?3,duration_ms=?4
+        `UPDATE etl_step_attempt SET attempt_status=?2,error_class=?3,
+         error_code=?4,error_detail=?4,finished_at=?5,duration_ms=?6
          WHERE id=?1 AND attempt_status='running'`,
-      ).bind(identity.attemptId, code, now, Math.max(0, Date.now()-identity.startedAtMs)),
+      ).bind(
+        identity.attemptId,
+        terminal ? "failed_terminal" : "failed_retryable",
+        terminal ? "terminal" : "transient",
+        code,
+        now,
+        Math.max(0, Date.now()-identity.startedAtMs),
+      ),
       this.db.prepare(
-        `UPDATE etl_step_run SET step_status='failed_retryable',last_error_code=?2,
-         last_error_detail=?2,updated_at=?3 WHERE id=?1`,
-      ).bind(identity.stepRunId, code, now),
+        `UPDATE etl_step_run SET step_status=?2,last_error_code=?3,
+         last_error_detail=?3,updated_at=?4 WHERE id=?1`,
+      ).bind(
+        identity.stepRunId,
+        terminal ? "failed_terminal" : "failed_retryable",
+        code,
+        now,
+      ),
     ]);
   }
 
@@ -153,6 +167,15 @@ export class WorkflowLedger {
       `UPDATE etl_workflow_run SET workflow_status='waiting',current_step_key=?2,
        last_error_code=?2,last_error_detail=?2,completed_at=NULL,
        last_progressed_at=?3,updated_at=?3 WHERE id=?1`,
+    ).bind(workflowRunId,reasonCode,now).run();
+  }
+
+  async cancelWorkflow(workflowRunId:number,reasonCode:string):Promise<void>{
+    const now=new Date().toISOString();
+    await this.db.prepare(
+      `UPDATE etl_workflow_run SET workflow_status='cancelled',current_step_key=NULL,
+       cancellation_reason_code=?2,completed_at=?3,last_progressed_at=?3,updated_at=?3
+       WHERE id=?1 AND workflow_status IN ('requested','running','waiting')`,
     ).bind(workflowRunId,reasonCode,now).run();
   }
 

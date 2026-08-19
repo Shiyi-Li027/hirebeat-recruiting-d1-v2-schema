@@ -18,6 +18,24 @@ migrations_table = "d1_migrations"
 binding = "hirebeat_hr_raw_resumes_pdf_r2_v1"
 bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
 
+[[queues.producers]]
+binding = "INTAKE_QUEUE"
+queue = "hirebeat-submission-intake-stg-v1"
+
+[[queues.consumers]]
+queue = "hirebeat-submission-intake-stg-v1"
+dead_letter_queue = "hirebeat-submission-intake-dlq-stg-v1"
+max_batch_size = 5
+max_batch_timeout = 1
+max_retries = 4
+retry_delay = 30
+
+[[queues.consumers]]
+queue = "hirebeat-submission-intake-dlq-stg-v1"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 2
+
 [vars]
 DEPLOYMENT_STAGE = "staging"
 SOURCE_SCHEMA_VERSION = "canonical-intake-v1"

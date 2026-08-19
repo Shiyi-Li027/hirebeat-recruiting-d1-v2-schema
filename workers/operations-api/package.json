@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml"
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
+    "test:unit": "esbuild test/offer-deadline.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-offer-deadline-test.mjs && node /tmp/hirebeat-offer-deadline-test.mjs && rm -f /tmp/hirebeat-offer-deadline-test.mjs"
   },
   "devDependencies": {
+    "esbuild": "^0.25.12",
     "typescript": "^5.9.3",
     "wrangler": "4.123.0"
   }

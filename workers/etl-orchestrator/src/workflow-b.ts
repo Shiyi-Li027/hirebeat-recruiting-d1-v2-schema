@@ -6,9 +6,10 @@ import { publishCandidateEnrichment, type EnrichmentResult } from "./workflow-b-
 import { executeMl, type MlRunResult } from "./workflow-b-ml";
 import { finalizeMlDecision, type FinalDecisionResult } from "./workflow-b-finalize";
 import { loadOrchestratorConfiguration } from "./runtime-configuration";
+import { toWorkflowThrowable } from "./workflow-errors";
 
 export interface WorkflowBOutcome {
-  status:"offer_created"|"rejected"|"waiting_position_jd";
+  status:"offer_created"|"rejected"|"waiting_position_jd"|"cancelled_stale";
   recommendationResultId:number|null;
   offerId:number|null;
 }
@@ -19,11 +20,12 @@ export async function executeWorkflowB(
   const payload=event.payload;
   const configuration=await step.do("load-workflow-b-configuration",()=>loadOrchestratorConfiguration(env.DB,payload.configurationReleaseId));
   const doConfigured=<T>(name:string,callback:()=>Promise<T>):Promise<T>=>step.do(name,{
-    // Cloudflare `limit` counts retries after the first call; the database
-    // configuration counts total attempts.
-    retries:{limit:Math.max(0,configuration.defaultStepMaxAttempts-1),delay:"1 second",backoff:"exponential"},
+    // Cloudflare `limit` is the total number of attempts, including the first.
+    retries:{limit:Math.max(1,configuration.defaultStepMaxAttempts),delay:"1 second",backoff:"exponential"},
     timeout:"10 minutes",
-  },callback);
+  },async()=>{
+    try{return await callback();}catch(error){throw toWorkflowThrowable(error);}
+  });
   const ledger=new WorkflowLedger(env.DB,configuration.defaultStepMaxAttempts);
   const run=await doConfigured("register-workflow-b",()=>ledger.ensureWorkflow({
     type:"workflow_b",version:env.WORKFLOW_B_VERSION,outboxEventId:payload.outboxEventId,
@@ -31,17 +33,20 @@ export async function executeWorkflowB(
     configurationReleaseId:payload.configurationReleaseId,
   }));
   try{
-    await doConfigured("verify-application-fence",()=>tracked(
+    const fenceValid=await doConfigured("verify-application-fence",()=>tracked(
       ledger,run.id,"verify_application_fence","Verify Application fence",async()=>{
         const row=await env.DB.prepare(
           `SELECT 1 valid FROM application WHERE id=?1 AND current_candidate_snapshot_id=?2
            AND decision_fence_token=?3 AND application_lifecycle_status='processing'
            AND application_decision_status='pending'`,
         ).bind(payload.applicationId,payload.candidateSnapshotId,payload.decisionFenceToken).first();
-        if(!row)throw new Error("workflow_b_fence_invalid_or_superseded");
-        return{valid:true};
+        return Boolean(row);
       },
     ));
+    if(!fenceValid){
+      await ledger.cancelWorkflow(run.id,"application_fence_invalid_or_superseded");
+      return{status:"cancelled_stale",recommendationResultId:null,offerId:null};
+    }
     const positionJdReady=await doConfigured("verify-position-jd-ready",()=>tracked(
       ledger,run.id,"verify_position_jd_ready","Verify Position JD is ready for ML",async()=>{
         const row=await env.DB.prepare(
