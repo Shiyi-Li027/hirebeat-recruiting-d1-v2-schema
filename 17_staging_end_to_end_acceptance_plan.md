@@ -270,6 +270,17 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
    Workflow on delivery 1, then interrupts only the acknowledgement boundary.
    Delivery 2 must confirm the existing `event_uuid` Workflow instance, publish
    the same Outbox row, and retain exactly one Workflow A database run.
+
+Recorded Staging evidence for item 7 on 2026-08-19:
+
+- Outbox event `36` created Workflow A during delivery attempt 1, then the
+  isolated fixture interrupted the acknowledgement boundary. Delivery attempt
+  2 confirmed the existing stable Workflow instance and changed the same
+  Outbox row to `published`.
+- Exactly one Workflow A database run existed for the event. It completed
+  `succeeded` with one run attempt and produced one normalized Submission.
+  The Outbox lease was cleared, and foreign-key validation returned no rows.
+
 8. Inject a permanent Workflow contract error and verify `NonRetryableError`
    stops immediately. Inject a transient service error and verify the step uses
    no more than the configured total-attempt limit.
@@ -414,9 +425,20 @@ Recorded Staging evidence for the temporary-failure portion of item 9 on
   completed `succeeded` with one Workflow run attempt. Foreign-key validation
   returned no rows.
 - This evidence closes the temporary Workflow-API failure/backoff case only.
-  Invalid Outbox JSON/destination and the post-Workflow-creation/pre-Outbox-ack
-  redelivery boundary remain separate staging cases; this result does not mark
-  either of those unexecuted cases complete.
+  The post-Workflow-creation/pre-Outbox-ack boundary is recorded separately in
+  item 7.
+- Outbox event `37` exercised invalid dispatch JSON and became
+  `failed_terminal` on attempt 1 with `outbox_payload_json_invalid`. Outbox
+  event `38` exercised an unsupported destination and became `failed_terminal`
+  on attempt 1 with
+  `unsupported_outbox_destination:raw_submission.published`. Both cleared
+  their leases, scheduled no retry, remained unpublished, and created no
+  Workflow or normalized Submission.
+- For both terminal fixtures, the persisted destination remained `workflow_a`
+  and the persisted payload still passed `json_valid`. This proves the test
+  changed only the isolated in-memory dispatch boundary and did not corrupt
+  stored Outbox evidence. Both cases passed `PRAGMA foreign_key_check`.
+
 10. Verify an Offer deadline submitted as a summer and winter
     `America/New_York` wall-clock time is normalized with the correct seasonal
     offset. Verify the spring DST gap is rejected and the repeated fall-back

@@ -32,6 +32,15 @@ ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS = {
     "outbox_retry": (
         "staging-google-fault-outbox-workflow-create-retry-once-001"
     ),
+    "outbox_post_create_ack": (
+        "staging-google-fault-outbox-post-create-ack-retry-once-001"
+    ),
+    "outbox_invalid_json": (
+        "staging-google-fault-outbox-invalid-json-terminal-001"
+    ),
+    "outbox_invalid_destination": (
+        "staging-google-fault-outbox-invalid-destination-terminal-001"
+    ),
     "workflow_transient": (
         "staging-google-fault-workflow-a-transient-retry-once-001"
     ),
@@ -507,6 +516,61 @@ def main() -> int:
           AND intake.source_record_id={outbox_retry_source};""",
         True,
     )
+    outbox_boundary_sources = ",".join(
+        quote(ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS[key])
+        for key in (
+            "outbox_post_create_ack",
+            "outbox_invalid_json",
+            "outbox_invalid_destination",
+        )
+    )
+    outbox_boundary_faults = execute(
+        f"""SELECT
+          intake.source_record_id,
+          intake.submission_uuid,
+          outbox.id AS outbox_event_id,
+          outbox.event_uuid,
+          outbox.event_type,
+          outbox.destination_key AS stored_destination_key,
+          outbox.dispatch_status,
+          outbox.delivery_attempt_count,
+          outbox.max_delivery_attempts,
+          outbox.next_attempt_at,
+          outbox.lease_owner,
+          outbox.lease_expires_at,
+          outbox.last_error_code,
+          outbox.last_error_detail,
+          outbox.published_at,
+          json_valid(outbox.event_payload_json) AS stored_payload_json_valid,
+          (SELECT COUNT(*) FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a')
+            AS workflow_a_count,
+          (SELECT workflow.workflow_status
+             FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a'
+            ORDER BY workflow.id DESC LIMIT 1) AS workflow_a_status,
+          (SELECT workflow.run_attempt_count
+             FROM etl_workflow_run AS workflow
+            WHERE workflow.trigger_outbox_event_id=outbox.id
+              AND workflow.workflow_type='workflow_a'
+            ORDER BY workflow.id DESC LIMIT 1)
+            AS workflow_a_run_attempt_count,
+          (SELECT COUNT(*) FROM submission_normalized AS normalized
+            WHERE normalized.raw_submission_id=raw.id) AS normalized_count
+        FROM raw_submission_intake_run AS intake
+        JOIN raw_submission AS raw
+          ON raw.raw_submission_intake_run_id=intake.id
+        JOIN outbox_event AS outbox
+          ON outbox.aggregate_type='raw_submission'
+         AND outbox.aggregate_id=raw.id
+         AND outbox.event_type='raw_submission.published'
+        WHERE intake.source_system='google_form'
+          AND intake.source_record_id IN ({outbox_boundary_sources})
+        ORDER BY intake.source_record_id;""",
+        True,
+    )
     workflow_fault_sources = ",".join(
         quote(ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS[key])
         for key in ("workflow_transient", "workflow_terminal")
@@ -714,6 +778,61 @@ def main() -> int:
             and outbox_retry["workflow_a_status"] == "succeeded"
             and outbox_retry["workflow_a_run_attempt_count"] == 1
         )
+    outbox_boundary_rows = {
+        row["source_record_id"]: row for row in outbox_boundary_faults
+    }
+    outbox_post_create_ack_passed = set(outbox_boundary_rows) == {
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_post_create_ack"],
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_invalid_json"],
+        ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_invalid_destination"],
+    }
+    outbox_terminal_boundaries_passed = outbox_post_create_ack_passed
+    if outbox_post_create_ack_passed:
+        post_create = outbox_boundary_rows[
+            ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_post_create_ack"]
+        ]
+        invalid_json = outbox_boundary_rows[
+            ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS["outbox_invalid_json"]
+        ]
+        invalid_destination = outbox_boundary_rows[
+            ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS[
+                "outbox_invalid_destination"
+            ]
+        ]
+        outbox_post_create_ack_passed = (
+            post_create["stored_destination_key"] == "workflow_a"
+            and post_create["dispatch_status"] == "published"
+            and post_create["delivery_attempt_count"] == 2
+            and post_create["lease_owner"] is None
+            and post_create["lease_expires_at"] is None
+            and post_create["last_error_code"] is None
+            and bool(post_create["published_at"])
+            and post_create["stored_payload_json_valid"] == 1
+            and post_create["workflow_a_count"] == 1
+            and post_create["workflow_a_status"] == "succeeded"
+            and post_create["workflow_a_run_attempt_count"] == 1
+            and post_create["normalized_count"] == 1
+        )
+        terminal_common = all(
+            row["stored_destination_key"] == "workflow_a"
+            and row["dispatch_status"] == "failed_terminal"
+            and row["delivery_attempt_count"] == 1
+            and row["next_attempt_at"] is None
+            and row["lease_owner"] is None
+            and row["lease_expires_at"] is None
+            and row["published_at"] is None
+            and row["stored_payload_json_valid"] == 1
+            and row["workflow_a_count"] == 0
+            and row["normalized_count"] == 0
+            for row in (invalid_json, invalid_destination)
+        )
+        outbox_terminal_boundaries_passed = (
+            terminal_common
+            and invalid_json["last_error_code"]
+            == "outbox_payload_json_invalid"
+            and invalid_destination["last_error_code"]
+            == "unsupported_outbox_destination:raw_submission.published"
+        )
     workflow_fault_rows = {
         row["source_record_id"]: row for row in workflow_step_faults
     }
@@ -804,10 +923,14 @@ def main() -> int:
         ),
         "source_parser_fault_injection": source_parser_faults_passed,
         "outbox_workflow_create_retry_fence": outbox_workflow_retry_passed,
+        "outbox_post_create_ack_idempotency": outbox_post_create_ack_passed,
+        "outbox_terminal_boundary_classification": (
+            outbox_terminal_boundaries_passed
+        ),
         "workflow_step_fault_classification": workflow_step_faults_passed,
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v6",
+        "schema_version": "hirebeat-staging-closeout-report-v7",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -822,11 +945,11 @@ def main() -> int:
         "malformed_envelope_evidence": malformed_envelope,
         "source_parser_fault_evidence": source_parser_faults,
         "outbox_workflow_retry_evidence": outbox_workflow_retry,
+        "outbox_boundary_fault_evidence": outbox_boundary_faults,
         "workflow_step_fault_evidence": workflow_step_faults,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete the still-unexecuted post-Workflow-creation/pre-ack redelivery and invalid Outbox JSON/destination staging cases listed in acceptance-plan sections 5 and 6.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],
