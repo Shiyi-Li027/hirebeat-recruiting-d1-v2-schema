@@ -137,23 +137,36 @@ export class OutboxDispatcher {
   }
 
   private async publish(row: OutboxRow): Promise<void> {
-    await this.faultInjector.beforeOutboxPublish(this.env.DB, {
+    const target = {
       eventType: row.event_type,
       destinationKey: row.destination_key,
       aggregateId: row.aggregate_id,
       deliveryAttemptCount: row.delivery_attempt_count,
-    });
-    const recoveryMessage = controlledRecoveryQueueMessage(row);
+    };
+    const dispatchInput = await this.faultInjector.beforeOutboxPublish(
+      this.env.DB,
+      target,
+      {
+        destinationKey: row.destination_key,
+        eventPayloadJson: row.event_payload_json,
+      },
+    );
+    const effectiveRow = {
+      ...row,
+      destination_key: dispatchInput.destinationKey,
+      event_payload_json: dispatchInput.eventPayloadJson,
+    };
+    const recoveryMessage = controlledRecoveryQueueMessage(effectiveRow);
     if (recoveryMessage) {
       await this.env.INTAKE_QUEUE.send(recoveryMessage);
       return;
     }
     let payload:Record<string,unknown>;
-    try{payload=JSON.parse(row.event_payload_json) as Record<string,unknown>;}
+    try{payload=JSON.parse(effectiveRow.event_payload_json) as Record<string,unknown>;}
     catch{throw new OutboxDispatchError("outbox_payload_json_invalid",false);}
     if (
       row.event_type === "raw_submission.published" &&
-      row.destination_key === "workflow_a"
+      effectiveRow.destination_key === "workflow_a"
     ) {
       const configuration = await this.env.DB.prepare(
         `SELECT configuration_release_id
@@ -176,7 +189,7 @@ export class OutboxDispatcher {
     if (
       (row.event_type === "application.core_published" || row.event_type === "application.ml_requested" ||
        row.event_type === "application.position_jd_ready") &&
-      row.destination_key === "workflow_b"
+      effectiveRow.destination_key === "workflow_b"
     ) {
       const applicationId = Number(payload.applicationId);
       const candidateSnapshotId = Number(payload.candidateSnapshotId);
@@ -200,7 +213,7 @@ export class OutboxDispatcher {
     }
     if (
       row.event_type === "offer.draft_created" &&
-      row.destination_key === "offer_lifecycle"
+      effectiveRow.destination_key === "offer_lifecycle"
     ) {
       // The draft is already durable in D1. This event is the stable extension
       // point for future document generation, approval, email, or e-signature.
@@ -218,6 +231,12 @@ export class OutboxDispatcher {
       if (!row) break;
       try {
         await this.publish(row);
+        await this.faultInjector.afterOutboxPublish(this.env.DB, {
+          eventType: row.event_type,
+          destinationKey: row.destination_key,
+          aggregateId: row.aggregate_id,
+          deliveryAttemptCount: row.delivery_attempt_count,
+        });
         const now = new Date().toISOString();
         await this.env.DB.prepare(
           `UPDATE outbox_event

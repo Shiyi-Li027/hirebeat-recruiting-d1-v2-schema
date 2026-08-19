@@ -265,6 +265,11 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
 5. Verify the returned hashes, model identity, cosine score, active threshold-policy snapshot and recommendation are stored.
 6. Score below the fixed threshold atomically produces Rejected; score at or above it atomically produces the ML result, hiring-stage result, Application `offer_created`, one Offer draft and one Offer-lifecycle Outbox event.
 7. Redeliver a Workflow Outbox event after Workflow creation but before Outbox acknowledgement. Expect `get/status` confirmation of the existing stable instance ID and no duplicate Workflow.
+   Staging source ID
+   `staging-google-fault-outbox-post-create-ack-retry-once-001` creates the
+   Workflow on delivery 1, then interrupts only the acknowledgement boundary.
+   Delivery 2 must confirm the existing `event_uuid` Workflow instance, publish
+   the same Outbox row, and retain exactly one Workflow A database run.
 8. Inject a permanent Workflow contract error and verify `NonRetryableError`
    stops immediately. Inject a transient service error and verify the step uses
    no more than the configured total-attempt limit.
@@ -389,6 +394,13 @@ candidate file.
    first claimed `raw_submission.published -> workflow_a` delivery. The same
    Outbox row must later become `published` with delivery count 2 and exactly
    one Workflow A database run.
+   Staging source IDs
+   `staging-google-fault-outbox-invalid-json-terminal-001` and
+   `staging-google-fault-outbox-invalid-destination-terminal-001` replace only
+   the in-memory dispatcher input at the exact synthetic boundary. The stored
+   Outbox payload remains valid JSON under the existing database CHECK. Each
+   event must become `failed_terminal` on delivery attempt 1, clear its lease,
+   schedule no retry, and create no Workflow.
 
 Recorded Staging evidence for the temporary-failure portion of item 9 on
 2026-08-19:

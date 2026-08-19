@@ -49,10 +49,13 @@ Outbox delivery is at least once. A stable `event_uuid` is also the Cloudflare W
 Deterministic Workflow/Outbox fault fixtures require both
 `DEPLOYMENT_STAGE=staging` and `ENABLE_STAGING_FAULT_INJECTION=enabled`, plus an
 exact reviewed synthetic source record ID. Production configuration must omit
-the enablement variable. The Outbox fixture fails only delivery attempt 1; the
-transient Workflow fixture fails only step attempt 1; the permanent contract
-fixture remains terminal on every attempted execution and crosses the runtime
-boundary as `NonRetryableError`.
+the enablement variable. The pre-create and post-create/pre-ack Outbox fixtures
+fail only delivery attempt 1. Separate boundary fixtures replace only the
+in-memory dispatcher input with invalid JSON or an unsupported destination, so
+the real terminal classifiers run without weakening D1's `json_valid` CHECK or
+mutating the stored event. The transient Workflow fixture fails only step
+attempt 1; the permanent contract fixture remains terminal on every attempted
+execution and crosses the runtime boundary as `NonRetryableError`.
 
 Within Workflow A, a retry of Resume extraction or Dedup removes only the same input/version's unpublished partial derivative before rebuilding it. Successful historical results, Raw evidence and shared reference rows are never part of that cleanup. ML input identity includes the Application decision fence, so a manual re-request produces a distinct auditable analysis run while technical retries under the same fence remain idempotent.
 

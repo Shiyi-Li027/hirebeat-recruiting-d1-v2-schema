@@ -6,9 +6,16 @@ interface OutboxFaultTarget {
 }
 
 type WorkflowAFault = "transient" | "terminal" | null;
+type OutboxBoundaryFault = "invalid_json" | "invalid_destination" | null;
 
 const OUTBOX_RETRY_SOURCE =
   "staging-google-fault-outbox-workflow-create-retry-once-001";
+const OUTBOX_POST_CREATE_ACK_RETRY_SOURCE =
+  "staging-google-fault-outbox-post-create-ack-retry-once-001";
+const OUTBOX_INVALID_JSON_SOURCE =
+  "staging-google-fault-outbox-invalid-json-terminal-001";
+const OUTBOX_INVALID_DESTINATION_SOURCE =
+  "staging-google-fault-outbox-invalid-destination-terminal-001";
 const WORKFLOW_A_TRANSIENT_SOURCE =
   "staging-google-fault-workflow-a-transient-retry-once-001";
 const WORKFLOW_A_TERMINAL_SOURCE =
@@ -40,6 +47,33 @@ export function shouldInjectOutboxRetry(
   );
 }
 
+export function shouldInjectOutboxPostCreateAckRetry(
+  sourceRecordId: string,
+  target: Omit<OutboxFaultTarget, "aggregateId">,
+): boolean {
+  return (
+    sourceRecordId === OUTBOX_POST_CREATE_ACK_RETRY_SOURCE &&
+    target.eventType === "raw_submission.published" &&
+    target.destinationKey === "workflow_a" &&
+    target.deliveryAttemptCount === 1
+  );
+}
+
+export function outboxBoundaryFaultForSource(
+  sourceRecordId: string,
+  target: Pick<OutboxFaultTarget, "eventType" | "destinationKey">,
+): OutboxBoundaryFault {
+  if (
+    target.eventType !== "raw_submission.published" ||
+    target.destinationKey !== "workflow_a"
+  ) return null;
+  if (sourceRecordId === OUTBOX_INVALID_JSON_SOURCE) return "invalid_json";
+  if (sourceRecordId === OUTBOX_INVALID_DESTINATION_SOURCE) {
+    return "invalid_destination";
+  }
+  return null;
+}
+
 export class StagingOrchestratorFaultInjector {
   private readonly enabled: boolean;
 
@@ -61,13 +95,13 @@ export class StagingOrchestratorFaultInjector {
   async beforeOutboxPublish(
     db: D1Database,
     target: OutboxFaultTarget,
-  ): Promise<void> {
+    input: { destinationKey: string | null; eventPayloadJson: string },
+  ): Promise<{ destinationKey: string | null; eventPayloadJson: string }> {
     if (
       !this.enabled ||
-      target.deliveryAttemptCount !== 1 ||
       target.eventType !== "raw_submission.published" ||
       target.destinationKey !== "workflow_a"
-    ) return;
+    ) return input;
     const sourceRecordId = await this.sourceRecordId(db, target.aggregateId);
     if (
       sourceRecordId &&
@@ -78,6 +112,41 @@ export class StagingOrchestratorFaultInjector {
       })
     ) {
       throw new Error("staging_fault_outbox_workflow_create_unavailable");
+    }
+    if (!sourceRecordId) return input;
+    const boundaryFault = outboxBoundaryFaultForSource(sourceRecordId, target);
+    if (boundaryFault === "invalid_json") {
+      // The D1 CHECK(json_valid(...)) prevents corrupt JSON at rest. Override
+      // only the in-memory dispatch input to exercise the real parser and
+      // permanent-error classification without weakening that constraint.
+      return { ...input, eventPayloadJson: "{" };
+    }
+    if (boundaryFault === "invalid_destination") {
+      return { ...input, destinationKey: "staging_invalid_destination" };
+    }
+    return input;
+  }
+
+  async afterOutboxPublish(
+    db: D1Database,
+    target: OutboxFaultTarget,
+  ): Promise<void> {
+    if (
+      !this.enabled ||
+      target.deliveryAttemptCount !== 1 ||
+      target.eventType !== "raw_submission.published" ||
+      target.destinationKey !== "workflow_a"
+    ) return;
+    const sourceRecordId = await this.sourceRecordId(db, target.aggregateId);
+    if (
+      sourceRecordId &&
+      shouldInjectOutboxPostCreateAckRetry(sourceRecordId, {
+        eventType: target.eventType,
+        destinationKey: target.destinationKey,
+        deliveryAttemptCount: target.deliveryAttemptCount,
+      })
+    ) {
+      throw new Error("staging_fault_outbox_post_create_ack_interrupted");
     }
   }
 
@@ -108,6 +177,9 @@ export class StagingOrchestratorFaultInjector {
 
 export const STAGING_ORCHESTRATOR_FAULT_SOURCES = {
   outboxRetry: OUTBOX_RETRY_SOURCE,
+  outboxPostCreateAckRetry: OUTBOX_POST_CREATE_ACK_RETRY_SOURCE,
+  outboxInvalidJson: OUTBOX_INVALID_JSON_SOURCE,
+  outboxInvalidDestination: OUTBOX_INVALID_DESTINATION_SOURCE,
   workflowATransient: WORKFLOW_A_TRANSIENT_SOURCE,
   workflowATerminal: WORKFLOW_A_TERMINAL_SOURCE,
 } as const;

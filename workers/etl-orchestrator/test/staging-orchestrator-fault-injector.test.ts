@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  outboxBoundaryFaultForSource,
   shouldInjectOutboxRetry,
+  shouldInjectOutboxPostCreateAckRetry,
   STAGING_ORCHESTRATOR_FAULT_SOURCES,
   workflowAFaultForSource,
 } from "../src/staging-orchestrator-fault-injector";
@@ -30,6 +32,60 @@ test("Outbox retry injection requires the exact first Workflow A delivery", () =
   assert.equal(
     shouldInjectOutboxRetry("staging-google-enrichment-001", base),
     false,
+  );
+});
+
+test("post-create acknowledgement failure targets only delivery one", () => {
+  const base = {
+    eventType: "raw_submission.published",
+    destinationKey: "workflow_a",
+    deliveryAttemptCount: 1,
+  };
+  assert.equal(
+    shouldInjectOutboxPostCreateAckRetry(
+      STAGING_ORCHESTRATOR_FAULT_SOURCES.outboxPostCreateAckRetry,
+      base,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldInjectOutboxPostCreateAckRetry(
+      STAGING_ORCHESTRATOR_FAULT_SOURCES.outboxPostCreateAckRetry,
+      { ...base, deliveryAttemptCount: 2 },
+    ),
+    false,
+  );
+});
+
+test("invalid Outbox boundary fixtures require exact source and route", () => {
+  const route = {
+    eventType: "raw_submission.published",
+    destinationKey: "workflow_a",
+  };
+  assert.equal(
+    outboxBoundaryFaultForSource(
+      STAGING_ORCHESTRATOR_FAULT_SOURCES.outboxInvalidJson,
+      route,
+    ),
+    "invalid_json",
+  );
+  assert.equal(
+    outboxBoundaryFaultForSource(
+      STAGING_ORCHESTRATOR_FAULT_SOURCES.outboxInvalidDestination,
+      route,
+    ),
+    "invalid_destination",
+  );
+  assert.equal(
+    outboxBoundaryFaultForSource(
+      STAGING_ORCHESTRATOR_FAULT_SOURCES.outboxInvalidJson,
+      { ...route, destinationKey: "workflow_b" },
+    ),
+    null,
+  );
+  assert.equal(
+    outboxBoundaryFaultForSource("staging-google-enrichment-001", route),
+    null,
   );
 });
 
