@@ -6,6 +6,7 @@ import type {
   PdfDownloadPolicy,
   ResolvedResumePdf,
 } from "./resume-resolver";
+import { runtimeFetch } from "../../../shared/runtime-fetch";
 
 export function extractGoogleDriveFileId(value: string): string | null {
   const trimmed = value.trim();
@@ -25,7 +26,7 @@ export function extractGoogleDriveFileId(value: string): string | null {
 export class GoogleDrivePdfDownloader {
   constructor(
     private readonly tokenProvider: GoogleServiceAccountTokenProvider,
-    private readonly fetchFunction: FetchFunction = fetch,
+    private readonly fetchFunction: FetchFunction = runtimeFetch,
   ) {}
 
   async download(

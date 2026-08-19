@@ -5,9 +5,10 @@ import type {
   PdfDownloadPolicy,
   ResolvedResumePdf,
 } from "./resume-resolver";
+import { runtimeFetch } from "../../../shared/runtime-fetch";
 
 export class AirtablePdfDownloader {
-  constructor(private readonly fetchFunction: FetchFunction = fetch) {}
+  constructor(private readonly fetchFunction: FetchFunction = runtimeFetch) {}
 
   async download(
     reference: PdfResumeReference,

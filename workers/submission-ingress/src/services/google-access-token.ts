@@ -1,5 +1,6 @@
 import { IngressError } from "../errors/ingress-error";
 import type { FetchFunction } from "./pdf-download";
+import { runtimeFetch } from "../../../shared/runtime-fetch";
 
 interface GoogleServiceAccount {
   client_email: string;
@@ -136,7 +137,7 @@ export class GoogleServiceAccountTokenProvider {
   constructor(
     private readonly serviceAccountJson: string,
     private readonly timeoutMs: number,
-    private readonly fetchFunction: FetchFunction = fetch,
+    private readonly fetchFunction: FetchFunction = runtimeFetch,
     private readonly reportDiagnostic: (
       diagnostic: GoogleTokenSafeDiagnostic,
     ) => void = (diagnostic) => console.error(JSON.stringify(diagnostic)),

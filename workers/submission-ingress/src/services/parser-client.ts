@@ -2,6 +2,7 @@ import type { ResolvedResumePdf } from "./resume-resolver";
 import { IngressError } from "../errors/ingress-error";
 import type { FetchFunction } from "./pdf-download";
 import type { CloudRunIdTokenProvider } from "../../../shared/google-cloud-run-id-token";
+import { runtimeFetch } from "../../../shared/runtime-fetch";
 
 export interface ParsedResumeText {
   text: string;
@@ -69,7 +70,7 @@ export class HttpParserClient implements ParserClient {
     private readonly authToken: string,
     private readonly cloudRunIdTokenProvider: CloudRunIdTokenProvider,
     private readonly timeoutMs: number,
-    private readonly fetchFunction: FetchFunction = fetch,
+    private readonly fetchFunction: FetchFunction = runtimeFetch,
   ) {}
 
   async parsePdf(pdf: ResolvedResumePdf): Promise<ParsedResumeText> {

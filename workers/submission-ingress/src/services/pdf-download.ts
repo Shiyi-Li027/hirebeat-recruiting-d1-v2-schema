@@ -3,11 +3,12 @@ import type {
   PdfDownloadPolicy,
   ResolvedResumePdf,
 } from "./resume-resolver";
+import {
+  runtimeFetch,
+  type RuntimeFetch,
+} from "../../../shared/runtime-fetch";
 
-export type FetchFunction = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
+export type FetchFunction = RuntimeFetch;
 
 export interface PdfSourceMetadata {
   originalFileName: string | null;
@@ -157,7 +158,7 @@ export async function downloadPdf(
   requestInit: RequestInit,
   metadata: PdfSourceMetadata,
   policy: PdfDownloadPolicy,
-  fetchFunction: FetchFunction = fetch,
+  fetchFunction: FetchFunction = runtimeFetch,
 ): Promise<ResolvedResumePdf> {
   requirePositiveSafeInteger(policy.maximumBytes, "maximum_pdf_bytes");
   requirePositiveSafeInteger(policy.timeoutMs, "pdf_download_timeout_ms");

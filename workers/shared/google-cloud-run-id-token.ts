@@ -1,7 +1,9 @@
-export type GoogleTokenFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
+import {
+  runtimeFetch,
+  type RuntimeFetch,
+} from "./runtime-fetch";
+
+export type GoogleTokenFetch = RuntimeFetch;
 
 interface GoogleServiceAccount {
   client_email: string;
@@ -106,7 +108,7 @@ export class GoogleServiceAccountCloudRunIdTokenProvider
   constructor(
     private readonly serviceAccountJson: string,
     private readonly timeoutMs = 10_000,
-    private readonly fetchFunction: GoogleTokenFetch = fetch,
+    private readonly fetchFunction: GoogleTokenFetch = runtimeFetch,
   ) {}
 
   invalidate(audience?: string): void {
