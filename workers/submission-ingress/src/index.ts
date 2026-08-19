@@ -19,6 +19,7 @@ import { WebCryptoPayloadHmacService } from "./services/payload-hmac";
 import { validateCanonicalIntake } from "./validation/canonical-intake-validator";
 import { GoogleServiceAccountCloudRunIdTokenProvider } from "../../shared/google-cloud-run-id-token";
 import { IntakeReplayEnvelopeStore } from "./services/intake-replay-envelope-store";
+import { StagingIntakeFaultInjector } from "./services/staging-intake-fault-injector";
 import {
   finalizeDeadLetterBatch,
   makeIntakeQueueMessage,
@@ -117,8 +118,12 @@ function buildProductionService(env: IngressEnv): ProductionIntakeService {
         env.PARSER_SERVICE_AUTH_TOKEN,
         cloudRunIdTokenProvider,
         configuration.parserTimeoutMs,
-      ),
+    ),
     new D1RawPublisher(env.DB),
+    new StagingIntakeFaultInjector(
+      env.DEPLOYMENT_STAGE,
+      env.ENABLE_STAGING_FAULT_INJECTION,
+    ),
   );
 }
 

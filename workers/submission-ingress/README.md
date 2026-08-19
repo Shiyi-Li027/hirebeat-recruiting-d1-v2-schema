@@ -106,3 +106,23 @@ R2 uses a conditional create. A technical redelivery reuses an existing object
 only after its size and SHA-256 metadata match; it never blindly overwrites the key.
 
 The production intake endpoint returns `202 queued` after authentication, validation and private replay-envelope persistence. `hirebeat-submission-intake-stg-v1` then performs PDF acquisition, R2 PDF storage, Parser execution and atomic Raw publication. With `max_retries = 4`, the platform performs at most five total deliveries. Only transient network, 429, 5xx and service-unavailable failures retry; invalid content, authentication and integrity failures stop immediately. The DLQ consumer automatically marks an exhausted retryable run `failed_terminal`.
+
+### Staging fault injection
+
+Deterministic source/Parser fault injection requires both
+`DEPLOYMENT_STAGE=staging` and `ENABLE_STAGING_FAULT_INJECTION=enabled`. It is
+limited to synthetic source record IDs beginning with
+`staging-google-fault-`; ordinary staging traffic is unaffected, and production
+configuration must omit or disable the enablement variable.
+
+- `staging-google-fault-source-download-retry-once-*` injects a retryable
+  source-download failure on the first D1-fenced attempt.
+- `staging-google-fault-parser-429-retry-once-*` injects Parser HTTP 429 on the
+  first D1-fenced attempt.
+- `staging-google-fault-parser-timeout-retry-once-*` injects a Parser timeout
+  on the first D1-fenced attempt.
+- `staging-google-fault-parser-empty-terminal-*` produces a terminal
+  `parser_empty_resume_text` outcome without Queue retry.
+
+The retry-once fixtures must recover through the actual Queue redelivery path;
+do not manually mutate their Intake run state or attempt counters.

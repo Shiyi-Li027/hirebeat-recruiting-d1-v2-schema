@@ -12,6 +12,10 @@ import type { PayloadHmacService } from "./payload-hmac";
 import type { R2ResumeStore } from "./r2-resume-store";
 import type { RawPublisher, ResumePublishOutcome } from "./raw-publisher";
 import type { ResumeResolver } from "./resume-resolver";
+import {
+  NOOP_INTAKE_FAULT_INJECTOR,
+  type IntakeFaultInjector,
+} from "./staging-intake-fault-injector";
 
 function staleCutoff(now: string, staleSeconds: number): string {
   return new Date(Date.parse(now) - staleSeconds * 1000).toISOString();
@@ -40,6 +44,8 @@ export class ProductionIntakeService implements IntakeService {
       configuration: SubmissionIngressConfiguration,
     ) => ParserClient,
     private readonly rawPublisher: RawPublisher,
+    private readonly faultInjector: IntakeFaultInjector =
+      NOOP_INTAKE_FAULT_INJECTOR,
   ) {
     this.coordinator = new IntakeRunCoordinator(intakeRuns);
   }
@@ -128,6 +134,7 @@ export class ProductionIntakeService implements IntakeService {
         resumeOutcome = { kind: "no_resume" };
       } else {
         try {
+          this.faultInjector.beforeResumeResolve(request, claim.attemptNumber);
           const pdf = await this.resumeResolver.resolve(request.resume, {
             maximumBytes: configuration.maxResumeFileSizeBytes,
             timeoutMs: configuration.parserTimeoutMs,
@@ -162,6 +169,7 @@ export class ProductionIntakeService implements IntakeService {
               pdf,
             );
             try {
+              this.faultInjector.beforeParser(request, claim.attemptNumber);
               const parsed = await this.parserClientFactory(
                 configuration,
               ).parsePdf(pdf);

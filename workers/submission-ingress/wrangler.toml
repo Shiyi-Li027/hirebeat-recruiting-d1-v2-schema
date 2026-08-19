@@ -41,6 +41,8 @@ DEPLOYMENT_STAGE = "staging"
 SOURCE_SCHEMA_VERSION = "canonical-intake-v1"
 SUBMISSION_UUID_NAMESPACE = "676628aa-0c13-4b8f-9dc1-3d675f7487a2"
 PARSER_SERVICE_URL = "https://hirebeat-resume-parser-stg-340548608366.us-east1.run.app"
+# This config is staging-only. Production configuration must omit or disable it.
+ENABLE_STAGING_FAULT_INJECTION = "enabled"
 
 # Set these with `wrangler secret put --config workers/submission-ingress/wrangler.toml`:
 # SUBMISSION_HMAC_KEY_V1

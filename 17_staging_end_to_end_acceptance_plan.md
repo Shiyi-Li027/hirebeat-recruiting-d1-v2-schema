@@ -115,6 +115,15 @@ private source CSVs and generated preflight JSON remain ignored by Git.
 2. Inject one retryable source-download or Parser failure. Verify the Queue
    redelivers automatically and `raw_submission_intake_run.attempt_count`
    increases only when a new D1-fenced processing attempt starts.
+   The staging-only deterministic fixtures are enabled only when both
+   `DEPLOYMENT_STAGE=staging` and
+   `ENABLE_STAGING_FAULT_INJECTION=enabled`. Use new source record IDs matching
+   `staging-google-fault-source-download-retry-once-*`,
+   `staging-google-fault-parser-429-retry-once-*`, or
+   `staging-google-fault-parser-timeout-retry-once-*`. Each retryable fixture
+   injects only on D1-fenced attempt 1 and must recover through the real Queue
+   redelivery path. `staging-google-fault-parser-empty-terminal-*` injects a
+   terminal empty-text Parser outcome and must never invoke a Queue retry.
 3. Verify `max_retries = 4` produces at most five total Queue deliveries, not
    six. Exhaustion must move the message to the Intake DLQ and automatically
    change a remaining `failed_retryable` run to `failed_terminal` with

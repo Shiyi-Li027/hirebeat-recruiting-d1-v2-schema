@@ -7,6 +7,7 @@ export interface IngressEnv {
   SOURCE_SCHEMA_VERSION: string;
   SUBMISSION_UUID_NAMESPACE: string;
   PARSER_SERVICE_URL: string;
+  ENABLE_STAGING_FAULT_INJECTION?: string;
 
   SUBMISSION_HMAC_KEY_V1: string;
   INGRESS_INTERNAL_AUTH_TOKEN: string;
