@@ -6,77 +6,13 @@
 -- REVIEW ONLY — DO NOT DEPLOY THIS FILE.
 --
 -- This standalone file exists only for human inspection and reconciliation.
--- The authoritative deployment history remains migrations/0001 through 0011.
+-- The authoritative deployment history remains the ordered migrations/ files.
 -- Do not add this file to Wrangler migrations, GitHub deployment workflows,
 -- Worker startup code, or any production/staging database execution command.
 --
--- Source snapshot:
---   schema/HIREBEAT_D1_CREATE_2026-08-17.sql
---
--- Coverage:
---   11 confirmed business groups
---   84 application tables
---   120 explicit indexes
---   current structural effects of migrations 0001-0011
---
--- Exclusions:
---   Seed/reference rows are intentionally excluded. Seed data is owned by
---   migrations 0004, 0006, 0007 and 0011 and is not part of table structure review.
---   Cloudflare-managed tables such as d1_migrations are also excluded.
---
--- Group inventory:
---
--- G01 — Shared reference data and talent taxonomies (21 tables)
---   function, seniority, contact_type, skill_type, skill,
---   skill_type_assignment, skill_proficiency_level, certification_type,
---   issuing_organization, certification, country, state, city, location,
---   degree, field_study, major, school, work_mode,
---   position_employment_type, position_occupational_type
---
--- G02 — Authoritative recruitment Catalog and form synchronization (11 tables)
---   company, company_contact_info, company_work_mode, position,
---   position_salary_range, position_skill, position_education_requirement,
---   position_certification_requirement, catalog_revision, catalog_sync_run,
---   catalog_sync_target_run
---
--- G03 — Submission ingress and faithful Raw records (3 tables)
---   raw_submission_intake_run, raw_submission, raw_submission_resume
---
--- G04 — Configuration, Workflow, retry, Outbox and audit (7 tables)
---   system_configuration_release, system_configuration, etl_workflow_run,
---   etl_step_run, etl_step_attempt, outbox_event, audit_event
---
--- G05 — Normalization and versioned Resume extraction (8 tables)
---   normalization_run, submission_normalized, resume_extraction,
---   resume_education, resume_employment, resume_skill, resume_project,
---   submission_identity_feature
---
--- G06 — Real-time deduplication and Application admission (3 tables)
---   submission_dedup_run, submission_dedup_match, submission_match_evidence
---
--- G07 — Person, Application, Candidate core and lineage (7 tables)
---   person, application, candidate_snapshot, application_source_lineage,
---   person_name, person_contact, person_link
---
--- G08 — Published Person/Candidate profile facts (11 tables)
---   education, person_education, candidate_education, person_position,
---   candidate_position, person_skill, candidate_skill, person_project,
---   candidate_project, person_certification, candidate_certification
---
--- G09 — ML anomaly, similarity, threshold and recommendation (5 tables)
---   ml_threshold_policy, ml_analysis_run, ml_anomaly_result,
---   ml_similarity_result, ml_recommendation_result
---
--- G10 — Hiring pipeline templates and Application stage execution (5 tables)
---   hiring_pipeline, pipeline_stage, pipeline_stage_transition,
---   application_stage_run, application_stage_transition_event
---
--- G11 — Offer master, immutable versions and lifecycle history (3 tables)
---   offer, offer_version, offer_status_history
---
--- SQL execution note inherited from the generated structural artifact:
--- Do not add BEGIN/COMMIT; D1 migration execution provides its transaction
--- boundary. Again, this review copy itself must not be executed for deployment.
+-- Source snapshot: schema/HIREBEAT_D1_CREATE_2026-08-17.sql
+-- Coverage: 11 groups, 84 application tables, 120 explicit indexes.
+-- Seed rows and Cloudflare-managed tables are intentionally excluded.
 -- ============================================================================
 
 PRAGMA defer_foreign_keys = on;
@@ -698,6 +634,7 @@ CREATE TABLE raw_submission_intake_run (
     CHECK (payload_conflict_count >= 0),
   last_error_code TEXT,
   last_error_detail TEXT,
+  recovery_fence_token TEXT,
   first_received_at TEXT NOT NULL,
   last_received_at TEXT NOT NULL,
   last_attempt_started_at TEXT,
@@ -731,6 +668,10 @@ CREATE TABLE raw_submission_intake_run (
   CHECK (
     accepted_resume_file_sha256 IS NULL
     OR length(accepted_resume_file_sha256) = 64
+  ),
+  CHECK (
+    recovery_fence_token IS NULL
+    OR length(trim(recovery_fence_token)) > 0
   )
 );
 

@@ -14,6 +14,9 @@
 | `migrations/0007_seed_minimum_runtime_reference_data.sql` | 写入最小 Contact、Work Mode、Degree reference seed，并补充 ML timeout 配置 |
 | `migrations/0008_enforce_command_idempotency.sql` | 为 Offer、Hiring 与 Catalog command audit 增加幂等唯一索引 |
 | `migrations/0009_enforce_single_application_promotion.sql` | 保证同一 normalized Submission 最多发布为一个 Application primary input |
+| `migrations/0010_require_jd_for_active_position.sql` | 只允许具有合格 JD 的 Position 进入 Active 状态 |
+| `migrations/0011_add_offer_response_deadline_policy.sql` | 发布 Offer 默认回复期限配置，并要求 sent Offer 使用未来的不可变版本期限 |
+| `migrations/0012_add_controlled_intake_recovery.sql` | 为技术重试耗尽后的受控 Intake 重放增加可旋转恢复 fence |
 | `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 84 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
 | `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成最新 CREATE/DELETE SQL，并保护已部署 migration 不被改写 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |
@@ -492,3 +495,22 @@ npx wrangler d1 execute DB --remote --command \
 程序本身必须改变时才进行修复；修复前不得删除 Raw、run、Outbox 或审计证据。
 完整分类、上限和自动唤醒规则见
 `18_automatic_recovery_policy.md`。
+
+修复根因后，通过受 Cloudflare Access 保护的 Operations API 释放原有
+R2 replay envelope，不重新提交申请内容：
+
+```bash
+cloudflared access curl \
+  "$OPERATIONS_URL/v1/intake-runs/INTAKE_RUN_ID/recover" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --data '{
+    "idempotency_key":"UNIQUE_RECOVERY_COMMAND_KEY",
+    "recovery_reason":"Describe the corrected root cause and approval."
+  }'
+```
+
+命令只接受技术重试耗尽、尚未发布 Raw 的 `failed_terminal` run。它在同一
+短事务中旋转 recovery fence、写入 Outbox 和审计记录；Orchestrator 将事件
+转发到原 Intake Queue。不要把 token、service-account JSON、PDF 或完整申请
+payload 放进命令、reason 或日志。

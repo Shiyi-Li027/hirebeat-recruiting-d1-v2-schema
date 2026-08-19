@@ -6,6 +6,7 @@ import { requestMlRecommendation } from "./hiring-command";
 import { createOfferVersion } from "./offer-version";
 import { createReference, referenceTypes, setReferenceActive } from "./reference-importer";
 import { catalogChildTypes, createCatalogChild, setCatalogChildActive } from "./catalog-child-importer";
+import { requestIntakeRecovery } from "./intake-recovery";
 
 interface Env { DB:D1Database;DEPLOYMENT_STAGE:string;ACCESS_TEAM_DOMAIN:string;ACCESS_AUD:string; }
 
@@ -40,6 +41,8 @@ export default {
       if(request.method==="POST"&&url.pathname==="/v1/catalog/revisions")return response(await publishCatalogRevision(env.DB,await jsonBody(request),auth.actor),201);
       const mlApplicationId=idFromPath(url.pathname,/^\/v1\/applications\/(\d+)\/ml-recommendation$/);
       if(request.method==="POST"&&mlApplicationId)return response(await requestMlRecommendation(env.DB,mlApplicationId,await jsonBody(request),auth.actor),202);
+      const intakeRunId=idFromPath(url.pathname,/^\/v1\/intake-runs\/(\d+)\/recover$/);
+      if(request.method==="POST"&&intakeRunId)return response(await requestIntakeRecovery(env.DB,intakeRunId,await jsonBody(request),auth.actor),202);
       const offerId=idFromPath(url.pathname,/^\/v1\/offers\/(\d+)\/status$/);
       if(request.method==="POST"&&offerId)return response(await transitionOffer(env.DB,offerId,await jsonBody(request),auth.actor));
       const versionOfferId=idFromPath(url.pathname,/^\/v1\/offers\/(\d+)\/versions$/);

@@ -624,6 +624,7 @@ CREATE TABLE raw_submission_intake_run (
     CHECK (payload_conflict_count >= 0),
   last_error_code TEXT,
   last_error_detail TEXT,
+  recovery_fence_token TEXT,
   first_received_at TEXT NOT NULL,
   last_received_at TEXT NOT NULL,
   last_attempt_started_at TEXT,
@@ -657,6 +658,10 @@ CREATE TABLE raw_submission_intake_run (
   CHECK (
     accepted_resume_file_sha256 IS NULL
     OR length(accepted_resume_file_sha256) = 64
+  ),
+  CHECK (
+    recovery_fence_token IS NULL
+    OR length(trim(recovery_fence_token)) > 0
   )
 );
 

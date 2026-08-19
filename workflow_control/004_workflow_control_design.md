@@ -284,6 +284,14 @@ cancelled
 
 `deduplication_key UNIQUE` 防止同一业务事实发布多个事件。Consumer 自己也必须按 event UUID/deduplication key 幂等，不能假设网络只投递一次。
 
+Outbox 不只启动 Workflow。Migration 0012 后，技术重试耗尽且根因已经修复的
+Intake 可以由 Operations API 原子写入
+`raw_submission.intake_recovery_requested`，目标为
+`cloudflare_queue/submission_intake`。Dispatcher 将该事件转换成带当前
+`recovery_fence_token` 的 Queue v2 消息。Outbox 负责“恢复批准已提交但 Queue
+发送失败”的窗口；Queue 负责发送成功后的有限自动重试；Ingress 在每次处理
+前检查 fence，阻止上一个恢复周期的旧消息继续写入。
+
 `aggregate_type + aggregate_id` 表示事件属于哪个业务实体，例如：
 
 ```text

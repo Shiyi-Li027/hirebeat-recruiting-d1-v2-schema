@@ -589,7 +589,7 @@ INSERT INTO "raw_submission" (
 
 -- ============================================================
 -- G03 raw_submission_intake_run
--- Nullable optional columns: source_schema_version, accepted_payload_hmac, last_received_payload_hmac, payload_hmac_key_version, last_technical_redelivery_mechanism, last_technical_redelivery_cause_code, last_technical_redelivery_at, last_error_code, last_error_detail, last_attempt_started_at, completed_at, configuration_release_id, accepted_resume_file_sha256
+-- Nullable optional columns: source_schema_version, accepted_payload_hmac, last_received_payload_hmac, payload_hmac_key_version, last_technical_redelivery_mechanism, last_technical_redelivery_cause_code, last_technical_redelivery_at, last_error_code, last_error_detail, last_attempt_started_at, completed_at, configuration_release_id, accepted_resume_file_sha256, recovery_fence_token
 -- Schema defaults when omitted: intake_status=received, attempt_count=0, technical_redelivery_count=0, payload_conflict_count=0
 INSERT INTO "raw_submission_intake_run" (
   "intake_run_uuid",

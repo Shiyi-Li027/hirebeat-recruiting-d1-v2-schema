@@ -48,7 +48,8 @@ to one event delivery.
 | Intake Queue and source download | Network interruption, 429, temporary 5xx, Google token network failure, temporary R2/D1 service failure | Retryable | Main Queue retries with jitter; five total deliveries; exhaustion goes to DLQ |
 | Intake replay integrity | Missing/mismatched Submission identity, keyed-HMAC mismatch, corrupt replay envelope | Terminal | Ack immediately; never process untrusted content |
 | Intake concurrency | Another delivery owns the active fence, stale delivery loses the fence | Stale/no-op or short retry | Existing in-progress work receives a short Queue retry; a lost fence is acknowledged |
-| Intake retry exhaustion | A retryable failure remains after the bounded attempts | Terminal after exhaustion | DLQ consumer marks the D1 run `failed_terminal`; no operator resubmission is required |
+| Intake retry exhaustion | A retryable failure remains after the bounded attempts | Terminal after exhaustion | DLQ consumer marks the D1 run `failed_terminal`; the source application is not resubmitted |
+| Intake controlled recovery | A Secret, permission, mapping, code, or external dependency was corrected after technical exhaustion | Operator-approved release, then automatic execution | Access-protected Operations API rotates the recovery fence and commits one Queue-targeted Outbox event; Outbox and Queue complete the replay automatically |
 | PDF Parser request | Timeout, connection error, 429, temporary 5xx | Retryable | Parent Intake Queue redelivers the whole idempotent Intake attempt |
 | PDF content/parser result | Unsupported or invalid PDF, successful parse with no usable text | Terminal parser outcome | Raw evidence remains; `resume_text` may be `NULL`; later Initial Cleaning blocks unusable Resume text |
 | Workflow A/B step | Temporary D1/service error | Retryable | Cloudflare Workflows retries the step with exponential backoff, five total attempts, ten-minute step timeout |
@@ -88,8 +89,25 @@ Operators may inspect alerts and terminal records, but normal progress must not
 depend on repeatedly pressing a button or resubmitting an unchanged request.
 Manual action remains appropriate only when the underlying input, permission,
 mapping, Secret, code, or business policy must actually change. After that
-change, a controlled replay/release mechanism may be used; the original Raw,
-workflow, Outbox, and audit evidence is not deleted.
+change, an authorized operator may call
+`POST /v1/intake-runs/{id}/recover` with a unique `idempotency_key` and a
+meaningful `recovery_reason`. The command is accepted only when the Intake run
+is `failed_terminal` because retryable technical attempts were exhausted and
+no Raw Submission has already been published.
+
+The command does not accept or copy the original application payload. It reuses
+the integrity-checked private R2 replay envelope, preserves the stable
+Submission UUID and accepted payload HMAC, rotates a new recovery fence, resets
+only the per-cycle attempt counter, and atomically commits the state change,
+Queue-targeted Outbox event, and audit event. The dispatcher then places a
+version-2 controlled-recovery message on the existing Intake Queue. A stale
+message from an earlier cycle fails the recovery-fence check and becomes a
+no-op, so it cannot publish Raw after a newer recovery cycle owns the run.
+
+The request itself is idempotent through the command audit unique constraint.
+Repeating the same `idempotency_key` returns the recorded result and cannot
+create another recovery event. Original Intake, Outbox, Queue/DLQ, and audit
+evidence is never deleted.
 
 ## 6. Observability and recalibration
 
@@ -104,6 +122,13 @@ Alerting should notify the team about DLQ growth, repeated terminal contract
 errors, old pending Outbox events, or an abnormal waiting-JD backlog. An alert
 does not replace the automatic state transition; it identifies a condition that
 may require correcting external data, permissions, code, or capacity.
+
+Google OAuth token-fetch exceptions emit only a structured safe diagnostic:
+failure stage, coarse failure class, exception name, and configured timeout.
+Service-account JSON, private keys, signed JWT assertions, OAuth access tokens,
+and raw exception messages are never logged. Use this diagnostic to correct the
+underlying cause before requesting controlled recovery; repeatedly releasing an
+unchanged permanent fault only creates another bounded failed cycle.
 
 ## 7. Deferred extensions
 

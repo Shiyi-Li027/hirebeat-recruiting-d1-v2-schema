@@ -30,6 +30,14 @@ The active `workflow.default_step_max_attempts` value counts total attempts, inc
 
 Submission intake is asynchronous. The authenticated HTTP route validates the source envelope, stores a private integrity-checked replay envelope in R2, publishes only its pointer and keyed HMAC to `hirebeat-submission-intake-stg-v1`, and returns HTTP 202. Queue `max_retries = 4` means one initial delivery plus four redeliveries, matching the frozen maximum of five total intake attempts. Retryable failures use jittered backoff; terminal failures are acknowledged immediately. Exhausted messages move to `hirebeat-submission-intake-dlq-stg-v1`, whose consumer automatically marks the D1 run `failed_terminal`.
 
+After a retryable technical failure exhausts that cycle, do not resubmit the
+source application. Correct the Secret, permission, mapping, dependency, or
+code, then use the Access-protected controlled-recovery command. It reuses the
+private R2 replay envelope and stable Submission identity, rotates a recovery
+fence, and commits one Queue-targeted Outbox event. Outbox and Queue then resume
+the work automatically. Older Queue messages are harmless because their fence
+no longer matches.
+
 The one-minute orchestrator schedule also runs a bounded idempotent reconciler before Outbox dispatch. It requeues only current `processing + pending` Applications whose Position JD has become ready, so superseded/cancelled Applications cannot be revived. It also expires sent/viewed Offers whose current immutable Offer version has passed `response_due_at`, appending Offer status history and an audit event.
 
 An Offer version may omit `response_due_at` while it is a Draft. The Operations API normalizes explicit deadlines to RFC 3339 UTC and rejects invalid or non-future values. On the `sent` transition, an explicit future deadline is retained; if it is absent, the API reads `offer.default_response_window_days` from the active versioned configuration, calculates the deadline from the actual send instant, derives a new immutable Offer version, points the Offer to it, and transitions the status in one short D1 batch. Database triggers reject any direct writer that attempts to enter `sent` without a parseable future deadline.
@@ -82,6 +90,8 @@ Reference and Catalog authoring endpoints include:
 - `PATCH /v1/reference/{type}/{id}/active-state` for controlled Reference activation/deactivation;
 - `GET /v1/catalog/child-types` and `POST /v1/catalog/children/{type}` for the remaining G02 child tables;
 - `PATCH /v1/catalog/children/{type}/{id}/active-state` for G02 child state changes;
+- `POST /v1/intake-runs/{id}/recover` for an audited, idempotent release of a
+  technically exhausted Intake run after its root cause has been corrected;
 
 For the first reviewed staging Catalog path, generate the ignored private
 preflight output and use the dry-run-first importer:

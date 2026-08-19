@@ -250,7 +250,7 @@ export default {
     const intake = buildProductionService(env);
     await Promise.all(
       batch.messages.map((message) =>
-        processIntakeQueueMessage({ message, store, hmac, intake }),
+        processIntakeQueueMessage({ message, store, hmac, intake, db: env.DB }),
       ),
     );
   },

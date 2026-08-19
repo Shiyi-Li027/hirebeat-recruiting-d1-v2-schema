@@ -183,6 +183,7 @@ HMAC 不同
 | `intake_status` | 当前 ingress 生命周期状态 |
 | 三个 count | 持久化尝试、技术重送、payload conflict 分开计数；不包含 G06 业务查重 |
 | last technical redelivery mechanism/cause/time | 最近一次技术重送的传输机制、根因和发生时间；不是申请人的重复申请原因 |
+| `recovery_fence_token` | 首次 Intake 为 NULL；每次经过授权的技术恢复生成新 UUID，只允许当前恢复周期的 Queue 消息继续处理，旧周期消息自动 no-op |
 | `last_error_*` | 只保存非敏感最后错误，不保存 token、payload、简历正文 |
 | received/attempt/completed timestamps | 运行摘要与重试调度依据 |
 
@@ -199,6 +200,15 @@ HMAC 不同
 | `cancelled` | 在成功落地前被可信上游或管理员主动取消，不再自动尝试 | 否 |
 
 补充边界：已经 `succeeded` 的 run 不允许转换回 `persisting_raw`、`failed_*` 或 `cancelled`。后续同事件技术重送只增加计数并返回原 Raw；如果需要停止后续招聘流程，应取消 G04 Workflow，而不是把已经成功发生的 Raw intake 改成 cancelled。
+
+技术重试耗尽后不得重新提交完整申请来“碰运气”。管理员先修复 Secret、
+权限、映射、依赖或代码，再通过 Access 保护的 Operations API 请求受控恢复。
+该命令只接受尚未发布 Raw 的技术耗尽 `failed_terminal` run，并在同一短事务
+中旋转 `recovery_fence_token`、清理本周期错误摘要、把本周期
+`attempt_count` 重置为 0、写入 Queue 目标 Outbox 和审计事件。它不改变
+`submission_uuid`、accepted payload HMAC、来源身份或 R2 replay envelope。
+Orchestrator 转发 Outbox 后，Queue 自动执行新的有限重试周期；所有带旧 fence
+的延迟消息均被确认但不执行。
 
 状态代码：
 
@@ -453,6 +463,11 @@ Position 不属于 Company
 | Cloudflare 限流/超时 | 是，指数退避 | 同上 |
 | SQL/Schema/programming error | 自动重试有限次后否 | run 记 failed_terminal；无半条 Raw |
 | 鉴权失败 | 否 | 通常不信任 payload；可仅写安全日志，不创建 Raw |
+
+Google OAuth token 获取的异常日志只允许输出失败阶段、粗粒度失败类型、异常
+名称和 timeout。禁止输出 service-account JSON、private key、JWT assertion、
+access token 或原始异常 message。只有根因确实已修复后才允许发起受控恢复；
+未修复便重放只会形成另一个有上限的失败周期。
 | 请求超出允许大小 | 否，要求来源修正 | run 能否创建取决于是否已取得可信 source identity |
 | 业务字段缺失或 Catalog stale | Ingress 不重试 | Raw 成功；由 Workflow A 判为 rejected/blocked |
 

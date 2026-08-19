@@ -15,7 +15,7 @@ This plan is the release gate between a bundle-valid implementation and producti
   hostname at the edge; every authoring route requires both Access admission
   and the Worker's own verified Access JWT;
 - R2 is private and no resume object has a public URL;
-- migrations `0001` through `0011` are applied and `PRAGMA foreign_key_check` is empty.
+- migrations `0001` through `0012` are applied and `PRAGMA foreign_key_check` is empty.
 
 ## 2. Ingress and Raw publication
 
@@ -120,6 +120,30 @@ private source CSVs and generated preflight JSON remain ignored by Git.
 5. Redeliver the same accepted message concurrently. Verify the active attempt
    fence permits one owner, stale work cannot publish twice, and technical
    redelivery metadata is updated without creating a second Raw Submission.
+6. Let a retryable technical error exhaust all five attempts and reach
+   `failed_terminal`. Correct the root cause, then call the protected recovery
+   command with a new command idempotency key:
+
+   ```bash
+   cloudflared access curl \
+     "$OPERATIONS_URL/v1/intake-runs/1/recover" \
+     -X POST \
+     -H "Content-Type: application/json" \
+     --data '{
+       "idempotency_key":"staging-intake-1-google-token-fixed-v1",
+       "recovery_reason":"Corrected the Google token dependency and approved replay."
+     }'
+   ```
+
+   Expect HTTP `202` with `status = recovery_queued`. Verify one
+   `command.intake.recovery.request` audit event and one
+   `raw_submission.intake_recovery_requested` Outbox event. The attempt counter
+   starts a new bounded cycle; the stable Submission UUID and accepted payload
+   HMAC do not change.
+7. Repeat step 6 with the same `idempotency_key`. Expect
+   `idempotent_reuse = true` and no second Outbox or audit row. Deliver an old
+   Queue message from the previous cycle and verify the recovery-fence mismatch
+   makes it a no-op.
 
 ## 4. Deduplication and resubmission
 

@@ -212,3 +212,31 @@ Active Position example:
 After a change affects selectable Company, Company Work Mode, or Position
 options, publish a Catalog revision through `POST /v1/catalog/revisions` so the
 external Airtable/Google channel synchronization can observe the new snapshot.
+
+## Controlled Intake recovery
+
+Do not submit the original application a second time after Queue retries are
+exhausted. First correct the underlying Secret, permission, mapping,
+dependency, or code. Then an authorized member may release the existing private
+R2 replay envelope:
+
+```http
+POST /v1/intake-runs/1/recover
+Content-Type: application/json
+
+{
+  "idempotency_key": "staging-intake-1-google-token-fixed-v1",
+  "recovery_reason": "Corrected the Google token dependency and approved replay."
+}
+```
+
+The endpoint returns `202` only for a technically exhausted
+`failed_terminal` run that has not published a Raw Submission. It preserves the
+source identity, Submission UUID, accepted payload HMAC, immutable replay
+envelope, frozen configuration release, and previous technical/audit evidence.
+It rotates a recovery fence and atomically creates a Queue-targeted Outbox event
+plus an audit event. Reusing the same command idempotency key cannot create a
+second recovery event.
+
+Never place a token, service-account JSON, private key, Resume text, PDF, or
+complete application payload in `recovery_reason`.

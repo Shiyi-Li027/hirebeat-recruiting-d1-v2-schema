@@ -10,6 +10,10 @@ database_id = "6c4275ca-faf3-4cba-867c-8ce807c30fc6"
 migrations_dir = "../../migrations"
 migrations_table = "d1_migrations"
 
+[[queues.producers]]
+binding = "INTAKE_QUEUE"
+queue = "hirebeat-submission-intake-stg-v1"
+
 [[workflows]]
 name = "hirebeat-workflow-a-v1"
 binding = "WORKFLOW_A"

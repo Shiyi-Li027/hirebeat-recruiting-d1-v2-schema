@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 
-import { createOrConfirmWorkflow, nextAttemptAt } from "../src/outbox-dispatcher";
+import {
+  controlledRecoveryQueueMessage,
+  createOrConfirmWorkflow,
+  nextAttemptAt,
+} from "../src/outbox-dispatcher";
 
 async function createSuccess(): Promise<void> {
   let creates=0;
@@ -45,4 +49,36 @@ const low=Date.parse(nextAttemptAt(1,()=>0));
 const high=Date.parse(nextAttemptAt(1,()=>1));
 assert.ok(low>=before+3_900&&low<=before+4_100);
 assert.ok(high>=before+5_900&&high<=before+6_100);
+const recoveryMessage=controlledRecoveryQueueMessage({
+  event_type:"raw_submission.intake_recovery_requested",
+  destination_key:"submission_intake",
+  event_payload_json:JSON.stringify({
+    submissionUuid:"940eba8a-696a-5121-a533-4ca5b7912236",
+    acceptedPayloadHmac:"b".repeat(64),
+    replayEnvelopeKey:"intake-replay-envelopes/v1/submission/hash.json",
+    recoveryFenceToken:"recovery-fence-1",
+    requestId:"request-1",
+  }),
+},"2026-08-19T00:00:00.000Z");
+assert.deepEqual(recoveryMessage,{
+  schemaVersion:"intake-queue-message-v2",
+  submissionUuid:"940eba8a-696a-5121-a533-4ca5b7912236",
+  acceptedPayloadHmac:"b".repeat(64),
+  replayEnvelopeKey:"intake-replay-envelopes/v1/submission/hash.json",
+  requestId:"request-1",
+  enqueuedAt:"2026-08-19T00:00:00.000Z",
+  recoveryFenceToken:"recovery-fence-1",
+  deliveryKind:"controlled_recovery",
+});
+assert.throws(()=>controlledRecoveryQueueMessage({
+  event_type:"raw_submission.intake_recovery_requested",
+  destination_key:"submission_intake",
+  event_payload_json:JSON.stringify({
+    submissionUuid:"submission",
+    acceptedPayloadHmac:"invalid",
+    replayEnvelopeKey:"wrong-prefix",
+    recoveryFenceToken:"",
+    requestId:"request",
+  }),
+}),/intake_recovery_event_payload_invalid/);
 console.log("Outbox Workflow instance idempotency tests passed.");

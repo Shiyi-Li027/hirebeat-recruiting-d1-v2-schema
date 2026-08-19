@@ -15,6 +15,46 @@ interface OutboxRow {
   max_delivery_attempts: number;
 }
 
+export function controlledRecoveryQueueMessage(
+  row: Pick<OutboxRow, "event_type" | "destination_key" | "event_payload_json">,
+  enqueuedAt = new Date().toISOString(),
+): Record<string, unknown> | null {
+  if (
+    row.event_type !== "raw_submission.intake_recovery_requested" ||
+    row.destination_key !== "submission_intake"
+  ) return null;
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(row.event_payload_json) as Record<string, unknown>;
+  } catch {
+    throw new OutboxDispatchError("outbox_payload_json_invalid", false);
+  }
+  const submissionUuid = String(payload.submissionUuid ?? "");
+  const acceptedPayloadHmac = String(payload.acceptedPayloadHmac ?? "");
+  const replayEnvelopeKey = String(payload.replayEnvelopeKey ?? "");
+  const recoveryFenceToken = String(payload.recoveryFenceToken ?? "");
+  const requestId = String(payload.requestId ?? "");
+  if (
+    submissionUuid.length === 0 ||
+    !/^[a-f0-9]{64}$/.test(acceptedPayloadHmac) ||
+    !replayEnvelopeKey.startsWith("intake-replay-envelopes/v1/") ||
+    recoveryFenceToken.length === 0 ||
+    requestId.length === 0
+  ) {
+    throw new OutboxDispatchError("intake_recovery_event_payload_invalid", false);
+  }
+  return {
+    schemaVersion: "intake-queue-message-v2",
+    submissionUuid,
+    acceptedPayloadHmac,
+    replayEnvelopeKey,
+    requestId,
+    enqueuedAt,
+    recoveryFenceToken,
+    deliveryKind: "controlled_recovery",
+  };
+}
+
 function nextAttemptAt(attempt: number, random = Math.random): string {
   const baseSeconds = Math.min(900, 5 * 2 ** Math.min(Math.max(0, attempt - 1), 8));
   const seconds = Math.max(1, Math.round(baseSeconds * (0.8 + random() * 0.4)));
@@ -89,6 +129,11 @@ export class OutboxDispatcher {
   }
 
   private async publish(row: OutboxRow): Promise<void> {
+    const recoveryMessage = controlledRecoveryQueueMessage(row);
+    if (recoveryMessage) {
+      await this.env.INTAKE_QUEUE.send(recoveryMessage);
+      return;
+    }
     let payload:Record<string,unknown>;
     try{payload=JSON.parse(row.event_payload_json) as Record<string,unknown>;}
     catch{throw new OutboxDispatchError("outbox_payload_json_invalid",false);}

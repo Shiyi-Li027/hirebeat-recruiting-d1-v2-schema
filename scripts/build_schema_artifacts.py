@@ -27,6 +27,9 @@ MODULES = [
 
 CREATE_OUTPUT = ROOT / "schema/HIREBEAT_D1_CREATE_2026-08-17.sql"
 DELETE_OUTPUT = ROOT / "schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql"
+REVIEW_OUTPUT = (
+    ROOT / "review_only/HIREBEAT_D1_SCHEMA_BY_GROUP_REVIEW_2026-08-18.sql"
+)
 BASELINE_MIGRATION = ROOT / "migrations/0001_initial_schema.sql"
 BASELINE_MIGRATION_SHA256 = (
     "63364e24b932fbe8e4a11314cb0afd76f3c46d5aa216af6c717deb3276f0a0f4"
@@ -134,6 +137,36 @@ def build_delete_sql(table_names: list[str]) -> str:
     return "\n".join(lines)
 
 
+def build_review_sql(create_sql: str) -> str:
+    """Render the latest grouped schema as an explicitly non-deployable copy."""
+    review_header = [
+        "-- ============================================================================",
+        "-- HIREBEAT D1 V2 — COMPLETE SCHEMA REVIEW COPY, GROUPED G01-G11",
+        "-- Review snapshot date: 2026-08-18",
+        "-- ============================================================================",
+        "--",
+        "-- REVIEW ONLY — DO NOT DEPLOY THIS FILE.",
+        "--",
+        "-- This standalone file exists only for human inspection and reconciliation.",
+        "-- The authoritative deployment history remains the ordered migrations/ files.",
+        "-- Do not add this file to Wrangler migrations, GitHub deployment workflows,",
+        "-- Worker startup code, or any production/staging database execution command.",
+        "--",
+        "-- Source snapshot: schema/HIREBEAT_D1_CREATE_2026-08-17.sql",
+        "-- Coverage: 11 groups, 84 application tables, 120 explicit indexes.",
+        "-- Seed rows and Cloudflare-managed tables are intentionally excluded.",
+        "-- ============================================================================",
+        "",
+    ]
+    create_lines = create_sql.splitlines()
+    first_pragma = next(
+        index
+        for index, line in enumerate(create_lines)
+        if line.strip().lower() == "pragma defer_foreign_keys = on;"
+    )
+    return "\n".join(review_header + create_lines[first_pragma:]) + "\n"
+
+
 def main() -> None:
     if not BASELINE_MIGRATION.is_file():
         raise FileNotFoundError(
@@ -162,6 +195,8 @@ def main() -> None:
     create_bytes = create_sql.encode("utf-8")
     CREATE_OUTPUT.write_bytes(create_bytes)
     DELETE_OUTPUT.write_text(build_delete_sql(table_names), encoding="utf-8")
+    REVIEW_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    REVIEW_OUTPUT.write_text(build_review_sql(create_sql), encoding="utf-8")
 
     print(f"Generated: {CREATE_OUTPUT.relative_to(ROOT)}")
     print(
@@ -169,6 +204,7 @@ def main() -> None:
         f"{BASELINE_MIGRATION.relative_to(ROOT)} ({baseline_hash})"
     )
     print(f"Generated: {DELETE_OUTPUT.relative_to(ROOT)}")
+    print(f"Generated: {REVIEW_OUTPUT.relative_to(ROOT)}")
     print(f"Validated tables: {len(table_names)}")
     print(f"Validated explicit indexes: {index_count}")
 

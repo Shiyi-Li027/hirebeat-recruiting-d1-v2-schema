@@ -332,7 +332,7 @@
 
 - 无默认值必填字段：`intake_run_uuid`, `submission_uuid`, `source_system`, `source_record_id`, `source_event_key`, `first_received_at`, `last_received_at`, `created_at`, `updated_at`
 - Schema 默认值：`intake_status=received`, `attempt_count=0`, `technical_redelivery_count=0`, `payload_conflict_count=0`
-- 可为 NULL：`source_schema_version`, `accepted_payload_hmac`, `last_received_payload_hmac`, `payload_hmac_key_version`, `last_technical_redelivery_mechanism`, `last_technical_redelivery_cause_code`, `last_technical_redelivery_at`, `last_error_code`, `last_error_detail`, `last_attempt_started_at`, `completed_at`, `configuration_release_id`, `accepted_resume_file_sha256`
+- 可为 NULL：`source_schema_version`, `accepted_payload_hmac`, `last_received_payload_hmac`, `payload_hmac_key_version`, `last_technical_redelivery_mechanism`, `last_technical_redelivery_cause_code`, `last_technical_redelivery_at`, `last_error_code`, `last_error_detail`, `last_attempt_started_at`, `completed_at`, `configuration_release_id`, `accepted_resume_file_sha256`, `recovery_fence_token`
 - 推导/状态规则：
   - intake_status: An intake coordinator records receipt before durable Raw persistence.
 - 常见失败：缺少必填值会触发 `NOT NULL`；无效父 ID 会触发 FK；重复业务键会触发 `UNIQUE`；非法状态或组合会触发 `CHECK`/Trigger。

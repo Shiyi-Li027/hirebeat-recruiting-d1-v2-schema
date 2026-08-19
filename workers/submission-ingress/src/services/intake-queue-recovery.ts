@@ -32,16 +32,40 @@ export function queueBackoffSeconds(attempts: number): number {
 function asQueueRetry(
   request: CanonicalIntakeRequest,
   attempts: number,
+  deliveryKind: "initial" | "controlled_recovery",
 ): CanonicalIntakeRequest {
-  if (attempts <= 1) return request;
+  if (attempts <= 1 && deliveryKind === "initial") return request;
   return {
     ...request,
     technicalDelivery: {
-      mechanism: "queue_retry",
-      causeCode: "cloudflare_queue_redelivery",
+      mechanism:
+        attempts <= 1 ? "worker_restart_recovery" : "queue_retry",
+      causeCode:
+        attempts <= 1
+          ? "operator_approved_controlled_recovery"
+          : "cloudflare_queue_redelivery",
       deliveredAt: new Date().toISOString(),
     },
   };
+}
+
+async function ownsCurrentRecoveryFence(
+  db: D1Database,
+  message: IntakeQueueMessage,
+): Promise<boolean> {
+  const row = await db.prepare(
+    `SELECT recovery_fence_token, accepted_payload_hmac
+     FROM raw_submission_intake_run
+     WHERE submission_uuid = ?1`,
+  ).bind(message.submissionUuid).first<{
+    recovery_fence_token: string | null;
+    accepted_payload_hmac: string | null;
+  }>();
+  if (!row) return (message.recoveryFenceToken ?? null) === null;
+  return (
+    row.recovery_fence_token === (message.recoveryFenceToken ?? null) &&
+    row.accepted_payload_hmac === message.acceptedPayloadHmac
+  );
 }
 
 export async function processIntakeQueueMessage(options: {
@@ -49,6 +73,7 @@ export async function processIntakeQueueMessage(options: {
   store: IntakeReplayEnvelopeStore;
   hmac: PayloadHmacService;
   intake: ProductionIntakeService;
+  db: D1Database;
 }): Promise<void> {
   const body = options.message.body;
   if (!isIntakeQueueMessage(body)) {
@@ -57,6 +82,10 @@ export async function processIntakeQueueMessage(options: {
   }
 
   try {
+    if (!(await ownsCurrentRecoveryFence(options.db, body))) {
+      options.message.ack();
+      return;
+    }
     const request = await options.store.get(body.replayEnvelopeKey);
     if (request.source.submissionUuid !== body.submissionUuid) {
       throw new IngressError({
@@ -77,7 +106,11 @@ export async function processIntakeQueueMessage(options: {
     }
 
     const receipt = await options.intake.receive(
-      asQueueRetry(request, options.message.attempts),
+      asQueueRetry(
+        request,
+        options.message.attempts,
+        body.deliveryKind ?? "initial",
+      ),
     );
     if (receipt.outcome === "existing_in_progress") {
       options.message.retry({ delaySeconds: 60 });
@@ -101,14 +134,18 @@ export function makeIntakeQueueMessage(options: {
   acceptedPayloadHmac: string;
   replayEnvelopeKey: string;
   requestId: string;
+  recoveryFenceToken?: string | null;
+  deliveryKind?: "initial" | "controlled_recovery";
 }): IntakeQueueMessage {
   return {
-    schemaVersion: "intake-queue-message-v1",
+    schemaVersion: "intake-queue-message-v2",
     submissionUuid: options.request.source.submissionUuid,
     acceptedPayloadHmac: options.acceptedPayloadHmac,
     replayEnvelopeKey: options.replayEnvelopeKey,
     requestId: options.requestId,
     enqueuedAt: new Date().toISOString(),
+    recoveryFenceToken: options.recoveryFenceToken ?? null,
+    deliveryKind: options.deliveryKind ?? "initial",
   };
 }
 
@@ -125,8 +162,16 @@ export async function finalizeDeadLetterBatch(
            last_error_code='intake_queue_attempts_exhausted',
            last_error_detail='Automatic Queue delivery exhausted the configured total-attempt limit.',
            completed_at=?2,updated_at=?2
-       WHERE submission_uuid=?1 AND intake_status='failed_retryable'`,
-    ).bind(message.body.submissionUuid,now).run();
+       WHERE submission_uuid=?1
+         AND intake_status='failed_retryable'
+         AND accepted_payload_hmac=?3
+         AND recovery_fence_token IS ?4`,
+    ).bind(
+      message.body.submissionUuid,
+      now,
+      message.body.acceptedPayloadHmac,
+      message.body.recoveryFenceToken ?? null,
+    ).run();
     message.ack();
   }));
 }

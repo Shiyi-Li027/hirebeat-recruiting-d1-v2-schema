@@ -12,6 +12,35 @@ interface CachedAccessToken {
   expiresAtEpochSeconds: number;
 }
 
+export interface GoogleTokenSafeDiagnostic {
+  event: "google_token_fetch_failed";
+  failureStage: "google_oauth_token_fetch";
+  failureClass: "timeout" | "fetch_type_error" | "fetch_exception";
+  errorName: string;
+  timeoutMs: number;
+}
+
+export function safeGoogleTokenDiagnostic(
+  error: unknown,
+  aborted: boolean,
+  timeoutMs: number,
+): GoogleTokenSafeDiagnostic {
+  const errorName = error instanceof Error
+    ? error.name.slice(0, 80)
+    : "NonErrorThrown";
+  return {
+    event: "google_token_fetch_failed",
+    failureStage: "google_oauth_token_fetch",
+    failureClass: aborted
+      ? "timeout"
+      : error instanceof TypeError
+        ? "fetch_type_error"
+        : "fetch_exception",
+    errorName,
+    timeoutMs,
+  };
+}
+
 const GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
@@ -108,6 +137,9 @@ export class GoogleServiceAccountTokenProvider {
     private readonly serviceAccountJson: string,
     private readonly timeoutMs: number,
     private readonly fetchFunction: FetchFunction = fetch,
+    private readonly reportDiagnostic: (
+      diagnostic: GoogleTokenSafeDiagnostic,
+    ) => void = (diagnostic) => console.error(JSON.stringify(diagnostic)),
   ) {}
 
   invalidate(): void {
@@ -187,6 +219,13 @@ export class GoogleServiceAccountTokenProvider {
         signal: controller.signal,
       });
     } catch (error) {
+      this.reportDiagnostic(
+        safeGoogleTokenDiagnostic(
+          error,
+          controller.signal.aborted,
+          this.timeoutMs,
+        ),
+      );
       throw new IngressError({
         kind: "retryable",
         safeCode: controller.signal.aborted
