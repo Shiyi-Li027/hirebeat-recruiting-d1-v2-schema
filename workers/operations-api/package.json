@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
-    "test:unit": "esbuild test/offer-deadline.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-offer-deadline-test.mjs && node /tmp/hirebeat-offer-deadline-test.mjs && esbuild test/intake-recovery-policy.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-intake-recovery-policy-test.mjs && node /tmp/hirebeat-intake-recovery-policy-test.mjs && rm -f /tmp/hirebeat-offer-deadline-test.mjs /tmp/hirebeat-intake-recovery-policy-test.mjs"
+    "test:unit": "esbuild test/offer-deadline.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-offer-deadline-test.mjs && node /tmp/hirebeat-offer-deadline-test.mjs && esbuild test/intake-recovery-policy.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-intake-recovery-policy-test.mjs && node /tmp/hirebeat-intake-recovery-policy-test.mjs && esbuild test/catalog-revision.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-catalog-revision-test.mjs && node /tmp/hirebeat-catalog-revision-test.mjs && rm -f /tmp/hirebeat-offer-deadline-test.mjs /tmp/hirebeat-intake-recovery-policy-test.mjs /tmp/hirebeat-catalog-revision-test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",

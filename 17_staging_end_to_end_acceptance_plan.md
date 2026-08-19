@@ -15,7 +15,7 @@ This plan is the release gate between a bundle-valid implementation and producti
   hostname at the edge; every authoring route requires both Access admission
   and the Worker's own verified Access JWT;
 - R2 is private and no resume object has a public URL;
-- migrations `0001` through `0012` are applied and `PRAGMA foreign_key_check` is empty.
+- migrations `0001` through `0013` are applied and `PRAGMA foreign_key_check` is empty.
 
 ## 2. Ingress and Raw publication
 

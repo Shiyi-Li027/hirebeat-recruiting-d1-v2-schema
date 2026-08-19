@@ -17,6 +17,7 @@
 | `migrations/0010_require_jd_for_active_position.sql` | 只允许具有合格 JD 的 Position 进入 Active 状态 |
 | `migrations/0011_add_offer_response_deadline_policy.sql` | 发布 Offer 默认回复期限配置，并要求 sent Offer 使用未来的不可变版本期限 |
 | `migrations/0012_add_controlled_intake_recovery.sql` | 为技术重试耗尽后的受控 Intake 重放增加可旋转恢复 fence |
+| `migrations/0013_allow_catalog_snapshot_republication.sql` | 允许目录经历 A → B → A 时为相同历史快照哈希创建新的顺序 Revision |
 | `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 84 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
 | `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成最新 CREATE/DELETE SQL，并保护已部署 migration 不被改写 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |

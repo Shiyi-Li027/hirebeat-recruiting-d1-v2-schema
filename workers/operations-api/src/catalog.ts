@@ -1,4 +1,5 @@
 import { commandKey, normalize, requirePositiveInteger, sha256 } from "./helpers";
+import { shouldCreateCatalogRevision } from "./catalog-revision";
 
 function activeFlag(value:unknown,defaultValue=1):number{
   if(value===undefined||value===null)return defaultValue;
@@ -161,8 +162,10 @@ export async function catalogOptions(db:D1Database):Promise<Record<string,unknow
 export async function publishCatalogRevision(db:D1Database,body:Record<string,unknown>,actor:string):Promise<Record<string,unknown>>{
   const key=commandKey(body);const eventType="command.catalog.revision.publish";const prior=await replay(db,eventType,key);if(prior)return{...prior,idempotent_reuse:true};
   const snapshot=await catalogOptions(db);delete snapshot.revision;const snapshotJson=JSON.stringify(snapshot);const snapshotHash=await sha256(snapshotJson);
-  const existing=await db.prepare(`SELECT id,revision_number FROM catalog_revision WHERE snapshot_sha256=?1`).bind(snapshotHash).first<{id:number;revision_number:number}>();
-  if(existing)return{catalog_revision_id:existing.id,revision_number:existing.revision_number,unchanged:true};
+  const latest=await db.prepare(`SELECT id,revision_number,snapshot_sha256 FROM catalog_revision ORDER BY revision_number DESC LIMIT 1`)
+    .first<{id:number;revision_number:number;snapshot_sha256:string}>();
+  if(!shouldCreateCatalogRevision(latest?.snapshot_sha256??null,snapshotHash)&&latest)
+    return{catalog_revision_id:latest.id,revision_number:latest.revision_number,unchanged:true};
   const next=await db.prepare(`SELECT COALESCE(MAX(revision_number),0)+1 revision_number FROM catalog_revision`).first<{revision_number:number}>();
   const uuid=crypto.randomUUID();const now=new Date().toISOString();
   await db.prepare(`INSERT INTO catalog_revision (catalog_revision_uuid,revision_number,catalog_snapshot_json,snapshot_sha256,change_reason,created_by_actor,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)`)

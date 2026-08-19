@@ -187,7 +187,7 @@ CREATE TABLE catalog_revision (
   catalog_revision_uuid TEXT NOT NULL UNIQUE,
   revision_number INTEGER NOT NULL UNIQUE CHECK (revision_number >= 1),
   catalog_snapshot_json TEXT NOT NULL,
-  snapshot_sha256 TEXT NOT NULL UNIQUE,
+  snapshot_sha256 TEXT NOT NULL,
   change_reason TEXT,
   created_by_actor TEXT,
   created_at TEXT NOT NULL,

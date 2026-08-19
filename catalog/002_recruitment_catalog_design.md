@@ -227,7 +227,7 @@ Company
 
 界面可呈现 `Company → Company Work Mode → Position`，但首版 Position 只按 Company 过滤，不按 Work Mode 再过滤。
 
-`catalog_snapshot_json` 使用 UTF-8 JSON TEXT 保存 ID、UUID、名称、active/status 和父子关系；`snapshot_sha256` 用于完整性和幂等核对。Revision append-only，不设置 `updated_at`；发布错误通过新 revision 修正。
+`catalog_snapshot_json` 使用 UTF-8 JSON TEXT 保存 ID、UUID、名称、active/status 和父子关系；`snapshot_sha256` 用于完整性和相邻发布幂等核对，但不设置全历史唯一约束。Revision append-only，不设置 `updated_at`；发布错误通过新 revision 修正。
 
 Revision 的生成时机是“有效可选目录发生变化并成功发布”，不是申请者每打开一次投递窗口。会生成新 revision 的典型变化包括：
 
@@ -236,7 +236,7 @@ Revision 的生成时机是“有效可选目录发生变化并成功发布”�
 - Position name、所属 Company 或 `position_status` 改变，并影响可选列表；
 - 其他任何导致 active option-tree snapshot hash 改变的变化。
 
-联系人、JD、薪资、Requirements 或 description 的变化，如果不改变可选 Company/Work Mode/Position 列表，则不生成 Catalog revision。发布服务应先构建新的 active option-tree 并计算 hash；若 hash 与最新 revision 相同，不插入重复 revision。
+联系人、JD、薪资、Requirements 或 description 的变化，如果不改变可选 Company/Work Mode/Position 列表，则不生成 Catalog revision。发布服务应先构建新的 active option-tree 并计算 hash；若 hash 与最新 revision 相同，不插入重复 revision。若目录经历 `A → B → A`，第二次发布 A 必须创建新的递增 revision，即使其 hash 与较早的 A 相同；这样才能保留发布顺序并重新触发落后渠道同步。
 
 打开新的投递窗口不会创建 revision。窗口读取或同步当时最新且已经成功发布的 revision：未来自建网页可以直接取得 `MAX(revision_number)` 对应的 snapshot；Airtable/Google Form 则使用该渠道最后一次成功同步的 revision。如果某渠道落后于最新 revision，先为它发起同步，再开放该投递入口；不要绕过 revision 直接临时拼接三张实时表，否则同一个窗口可能读到不一致的 Company、Work Mode 和 Position 状态。
 

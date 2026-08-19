@@ -102,6 +102,41 @@ def validate(check_config: bool) -> None:
     try:
         for migration_path in migration_paths:
             connection.executescript(migration_path.read_text(encoding="utf-8"))
+
+        # Catalog publication order is significant. A -> B -> A must be able
+        # to store the returning A as a new revision even though its integrity
+        # hash matches a historical row.
+        connection.execute("SAVEPOINT validate_catalog_republication")
+        try:
+            repeated_hash = "a" * 64
+            connection.execute(
+                """
+                INSERT INTO catalog_revision (
+                  catalog_revision_uuid, revision_number,
+                  catalog_snapshot_json, snapshot_sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                ("validator-catalog-a1", 900001, "{}", repeated_hash, "2026-08-19T00:00:00Z"),
+            )
+            connection.execute(
+                """
+                INSERT INTO catalog_revision (
+                  catalog_revision_uuid, revision_number,
+                  catalog_snapshot_json, snapshot_sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                ("validator-catalog-a2", 900002, "{}", repeated_hash, "2026-08-19T00:00:01Z"),
+            )
+        except sqlite3.IntegrityError as error:
+            raise SystemExit(
+                "Schema validation failed: catalog_revision must allow a "
+                "historical snapshot hash to be republished after an "
+                "intervening revision."
+            ) from error
+        finally:
+            connection.execute("ROLLBACK TO validate_catalog_republication")
+            connection.execute("RELEASE validate_catalog_republication")
+
         table_count = connection.execute(
             """
             SELECT COUNT(*) FROM sqlite_master
