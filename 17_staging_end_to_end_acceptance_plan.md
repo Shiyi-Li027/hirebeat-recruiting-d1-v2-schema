@@ -285,11 +285,12 @@ Recorded Staging evidence for item 8 on 2026-08-19:
   Submission was retained.
 - `staging-google-fault-workflow-a-terminal-contract-001` completed as
   `failed_terminal` after one Workflow run and one normalization attempt. Both
-  Workflow and step retained
-  `staging_fault_workflow_contract_configuration_missing`; no normalized
-  Submission or Application lineage was created. The Cloudflare tail surfaced
-  the terminal Workflow exception, while the durable ledger proved that no
-  retry or running residue remained.
+  ledgers retained the same terminal cause: the step stored the original
+  `staging_fault_workflow_contract_configuration_missing`, while the Workflow
+  stored its `NonRetryableError` boundary form with the same cause. No
+  normalized Submission or Application lineage was created. The Cloudflare
+  tail surfaced the terminal Workflow exception, while the durable ledger
+  proved that no retry or running residue remained.
 - Both fixtures passed `PRAGMA foreign_key_check`. These controls did not
   modify a Migration, table definition, frozen retry limit, or business row
   outside their isolated synthetic submissions.

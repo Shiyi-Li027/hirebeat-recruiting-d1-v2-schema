@@ -745,7 +745,10 @@ def main() -> int:
             and terminal["workflow_status"] == "failed_terminal"
             and terminal["run_attempt_count"] == 1
             and terminal["workflow_last_error_code"]
-            == "staging_fault_workflow_contract_configuration_missing"
+            == (
+                "NonRetryableError: "
+                "staging_fault_workflow_contract_configuration_missing"
+            )
             and terminal["step_status"] == "failed_terminal"
             and terminal["step_attempt_count"] == 1
             and terminal["total_step_attempt_count"] == 1
