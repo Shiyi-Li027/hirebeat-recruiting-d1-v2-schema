@@ -240,6 +240,9 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
    Separately verify with a controlled database fixture that a superseded
    historical waiter is excluded by the `processing + pending` and latest-run
    predicates and receives no ML run, Offer, or current-pointer ownership.
+   The fixture must also prove that an older waiting row is excluded when a
+   newer Workflow B row is already running, even if the Application itself is
+   still `processing + pending`.
 
 ## 6. Operations and Offer
 

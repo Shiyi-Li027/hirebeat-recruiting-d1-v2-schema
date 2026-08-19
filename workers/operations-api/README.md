@@ -182,11 +182,19 @@ expression is not an approved production authoring path.
 
 When an approved Position update makes the Position active with a ready JD, the
 Operations API also finds Applications whose Workflow B is in
-`waiting_position_jd`, rotates each Application decision fence, cancels the old
-waiting database run, and publishes one idempotent
+`waiting_position_jd` and is their latest Workflow B run, requires each
+Application to remain current `processing + pending`, rotates its decision
+fence, cancels the old waiting database run, and publishes one idempotent
 `application.position_jd_ready` Outbox event per Application. The dispatcher
 then starts a new Workflow B instance with the new fence; it never resumes an
 obsolete in-memory execution.
+
+Draft Positions remain absent from `GET /v1/catalog/options` and Workflow A
+blocks them even when a trusted source references the authoritative Position
+ID. Initial Cleaning distinguishes `submitted_position_not_active`,
+`submitted_position_wrong_company`, and `submitted_position_jd_not_ready`.
+Workflow B records `waiting_position_jd` only when a Position that was ready
+during Workflow A loses readiness after the Application was created.
 
 Draft Position example:
 

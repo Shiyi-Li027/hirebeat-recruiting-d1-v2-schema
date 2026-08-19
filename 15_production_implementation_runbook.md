@@ -126,8 +126,9 @@ private source rows.
   and non-ready-JD Positions using distinct reason codes. Workflow B retains a
   second readiness check for a Position that changes after Application creation.
 - A later Position update that supplies a ready JD requeues every matching
-  `waiting_position_jd` Application through an idempotent Outbox event and a
-  newly rotated decision fence.
+  current `processing + pending` Application only when the waiting row is its
+  latest Workflow B run, through an idempotent Outbox event and a newly rotated
+  decision fence.
 
 - Catalog company, company-work-mode, position and revision endpoints.
 - `POST /v1/applications/{id}/ml-recommendation`: rotate fence and request a fresh Workflow B run.

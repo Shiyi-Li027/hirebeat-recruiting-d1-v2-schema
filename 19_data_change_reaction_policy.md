@@ -146,7 +146,8 @@ fact. Later Position changes follow these rules:
   current Position state and cannot call ML if the Position is no longer ready;
 - a superseded Application is never revived;
 - only a current `processing + pending` Application that is explicitly waiting
-  for Position readiness is eligible for a fenced resume event;
+  for Position readiness, and whose waiting row is its latest Workflow B run,
+  is eligible for a fenced resume event;
 - operational cancellation caused by closing/archiving a Position should use
   an explicit reviewed command and audit reason, not an implicit cascade.
 

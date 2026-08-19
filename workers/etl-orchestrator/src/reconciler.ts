@@ -1,3 +1,5 @@
+import { CURRENT_POSITION_JD_WAITER_PREDICATE } from "../../shared/src/position-jd-waiter-policy";
+
 interface WaitingJdRow {
   application_id:number;candidate_snapshot_id:number;old_fence_token:string;
   workflow_run_id:number;configuration_release_id:number;max_delivery_attempts:number;
@@ -24,12 +26,7 @@ async function reconcileJdWaiters(db:D1Database,limit:number):Promise<number>{
        AND w.current_step_key='waiting_position_jd'
      JOIN system_configuration config ON config.configuration_release_id=w.configuration_release_id
        AND config.configuration_scope='outbox' AND config.configuration_key='max_delivery_attempts'
-     WHERE app.application_lifecycle_status='processing'
-       AND app.application_decision_status='pending'
-       AND app.current_candidate_snapshot_id IS NOT NULL
-       AND w.id=(SELECT MAX(latest.id) FROM etl_workflow_run latest
-                 WHERE latest.application_id=app.id AND latest.workflow_type='workflow_b'
-                   AND latest.workflow_status='waiting' AND latest.current_step_key='waiting_position_jd')
+     WHERE ${CURRENT_POSITION_JD_WAITER_PREDICATE}
        AND NOT EXISTS (SELECT 1 FROM outbox_event o
                        WHERE o.deduplication_key='workflow_b_jd_ready:'||app.id||':'||w.id)
      ORDER BY app.id LIMIT ?1`,
