@@ -1,4 +1,5 @@
 import { isoDate, normalizeEmail, normalizePhone, normalizeWhitespace, splitName } from "./crypto";
+import { positionAdmissionReason } from "./position-readiness";
 
 interface RawInputRow {
   id: number;
@@ -68,15 +69,19 @@ export async function initialCleaning(
   rawSubmissionId: number,
 ): Promise<InitialCleaningResult> {
   const row = await rawInput(db, rawSubmissionId);
+  const positionReason=positionAdmissionReason({
+    submittedPositionId:row.submitted_position_id,
+    submittedCompanyId:row.submitted_company_id,
+    positionCompanyId:row.position_company_id,
+    positionStatus:row.position_status,
+    positionJd:row.position_jd,
+  });
   let reason: string | null = null;
   if (row.resume_text_status !== "available" || (row.resume_text?.trim().length ?? 0) < 10)
     reason = "resume_text_missing_or_too_short";
   else if (!row.submitted_company_id || row.company_active !== 1)
     reason = "submitted_company_missing_or_inactive";
-  else if (!row.submitted_position_id || row.position_status !== "active" || row.position_company_id !== row.submitted_company_id)
-    reason = "submitted_position_missing_inactive_or_wrong_company";
-  else if (!row.position_jd || row.position_jd.trim().length < 10)
-    reason = "submitted_position_jd_not_ready";
+  else if (positionReason) reason = positionReason;
   else if (row.submitted_company_work_mode_id !== null && row.work_mode_valid !== 1)
     reason = "submitted_company_work_mode_invalid_or_inactive";
   else if (row.submitted_company_work_mode_id === null && row.active_work_mode_count > 0)

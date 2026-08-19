@@ -22,6 +22,24 @@ skill 1 ──< skill_type_assignment >── 1 skill_type
 
 因此一条规范 Skill 可以属于 Language、Technology、Function 中一个或多个类型，Candidate/Position 只关联同一个 `skill.id`，不会因为类型不同重复计算同一技能。
 
+## Production importer
+
+Operations API 通过固定白名单导入本组 21 种 Reference：
+
+```text
+GET   /v1/reference/types
+POST  /v1/reference/{reference_type}
+PATCH /v1/reference/{reference_type}/{id}/active-state
+```
+
+- 每个写请求必须包含独立 `idempotency_key`；
+- importer 自动生成缺失的 UUID、`normalized_*` 和 UTC 时间戳；
+- schema 中具有 `is_active` 的新记录，未显式提供状态时默认写入 `1`；
+- 只有请求明确传入 `is_active: false` 或 `0` 时才创建为 inactive；
+- `skill_type_assignment` 与 `location` 没有 `is_active`，不制造虚假状态字段；
+- code、UUID 和主键不通过 active-state 端点修改；语义改变时新建记录并停用旧记录；
+- API 调用方不能指定白名单之外的 D1 表名。
+
 这里的 `UNIQUE(skill_id, skill_type_id)` 是**组合唯一约束**，不是要求 `skill_id` 单独唯一。例如以下三行全部允许：
 
 ```text
@@ -323,3 +341,8 @@ reference_merged
 发现重复 row 时选择一个 canonical row。尚未发布、仍处于 draft/current operational 状态且明确允许迁移的记录，可以通过受控 migration 改指 canonical ID；终态历史事实默认保持原引用。旧 row 在迁移后设置 `is_active = 0`。业务代码不得通过 `ON DELETE CASCADE` 批量删除引用历史。
 
 首版不为全部 G01 表创建各自的 temporal/version history。`updated_at` 表示当前记录最后修改时间，`audit_event` 记录重要变更；将统一 `reference_data_release` 及 Workflow 冻结 Reference release 的能力保留为未来增强项。
+
+所有 Reference 字段的更新分类、Position 的逐字段反应、Catalog revision、原生
+表单窗口冻结和历史快照边界统一记录在 `19_data_change_reaction_policy.md`。该策略
+明确禁止使用普通 UPDATE 追溯改写 Application、ML 或 Offer，也禁止让每张
+Reference 表各自通过 Trigger 调用外部系统。

@@ -49,11 +49,41 @@ def main() -> int:
             "unknown_technical_redelivery",
         ),
     )
+    parser.add_argument("--company-id", type=int, default=1)
+    parser.add_argument("--company-name", default="AGS Logistics")
+    parser.add_argument("--company-work-mode-id", type=int, default=1)
+    parser.add_argument("--company-work-mode", default="On-site")
+    parser.add_argument("--position-id", type=int, default=1)
+    parser.add_argument(
+        "--position-name", default="Operations Data Analyst (On-site)"
+    )
+    parser.add_argument("--candidate-name", default="Alex Morgan")
+    parser.add_argument(
+        "--candidate-email", default="alex.morgan.synthetic@example.com"
+    )
+    parser.add_argument("--candidate-phone", default="+1 202 555 0147")
     args = parser.parse_args()
 
     file_id = args.google_drive_file_id.strip()
     if not DRIVE_FILE_ID_PATTERN.fullmatch(file_id):
         parser.error("--google-drive-file-id does not look like a Google Drive file ID")
+    for argument, value in (
+        ("--company-id", args.company_id),
+        ("--company-work-mode-id", args.company_work_mode_id),
+        ("--position-id", args.position_id),
+    ):
+        if value <= 0:
+            parser.error(f"{argument} must be positive")
+    for argument, value in (
+        ("--company-name", args.company_name),
+        ("--company-work-mode", args.company_work_mode),
+        ("--position-name", args.position_name),
+        ("--candidate-name", args.candidate_name),
+        ("--candidate-email", args.candidate_email),
+        ("--candidate-phone", args.candidate_phone),
+    ):
+        if not value.strip():
+            parser.error(f"{argument} must not be empty")
 
     token = token_value()
     if not token:
@@ -75,15 +105,15 @@ def main() -> int:
             else "staging_acceptance_redelivery"
         ),
         "fields": {
-            "Company ID": 1,
-            "Company Name": "AGS Logistics",
-            "Company Work Mode ID": 1,
-            "Company Work Mode": "On-site",
-            "Position ID": 1,
-            "Position Name": "Operations Data Analyst (On-site)",
-            "Candidate Name": "Alex Morgan",
-            "Email Address": "alex.morgan.synthetic@example.com",
-            "Phone Number": "+1 202 555 0147",
+            "Company ID": args.company_id,
+            "Company Name": args.company_name.strip(),
+            "Company Work Mode ID": args.company_work_mode_id,
+            "Company Work Mode": args.company_work_mode.strip(),
+            "Position ID": args.position_id,
+            "Position Name": args.position_name.strip(),
+            "Candidate Name": args.candidate_name.strip(),
+            "Email Address": args.candidate_email.strip(),
+            "Phone Number": args.candidate_phone.strip(),
             "Start Working Date": "2026-09-01",
             "End Working Date": None,
             "Work Duration": "12 months",

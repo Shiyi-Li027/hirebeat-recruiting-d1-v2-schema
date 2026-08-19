@@ -10,6 +10,10 @@ This repository contains the confirmed schema and the first complete production 
 
 本仓库包含 HireBeat 新版招聘数据库已经确认的 Schema，以及第一版完整生产实现边界：Airtable/Google 认证接入、Queue/DLQ 自动恢复、私有 R2 PDF 留存、PDF 解析、Raw 原子发布、Outbox、Workflow A、Workflow B、定时 Reconciler、ML 推理、招聘决定、Offer draft/version/lifecycle command 与受保护的 Catalog Operations API。
 
+字段更新后的同步、审计、版本化、重试和历史冻结边界见
+`19_data_change_reaction_policy.md`。它覆盖所有 Reference/status 字段家族，并对
+Position 提供逐字段反应矩阵。
+
 Current verified baseline:
 
 | Item | Result |

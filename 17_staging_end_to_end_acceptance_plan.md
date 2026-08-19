@@ -96,7 +96,11 @@ private source CSVs and generated preflight JSON remain ignored by Git.
 
 ## 3. Workflow A
 
-1. Valid active Company/optional Company Work Mode/Position IDs and usable Resume text pass Initial Cleaning.
+1. Valid active Company/optional Company Work Mode and an authoritative
+   `draft` or `active` Position ID with usable Resume text pass Initial
+   Cleaning. Draft Positions are not selectable Catalog options, but a trusted
+   source record that already references one may publish an Application that
+   waits for JD in Workflow B.
 2. Missing Resume text, Resume text shorter than the frozen minimum, inactive or mismatched Catalog IDs are blocked with explicit reason codes; no Application is published.
 3. Zero Education, Employment, Skill or Project rows are valid extraction outcomes and require no placeholder rows.
 4. A transient step failure is retried up to the active configured total-attempt limit. A terminal failure retains Raw, workflow and error history while compensating only unpublished workflow-owned derivatives.
@@ -154,14 +158,48 @@ private source CSVs and generated preflight JSON remain ignored by Git.
 5. Verify maximum attempts includes the first submission and the sixth attempt is retained in Submission/Dedup but blocked from Application publication.
 6. Verify prior Offer states that are not automatically reopenable produce `blocked_prior_application_state`.
 
+### 4A. Isolated rejected-to-resubmission acceptance fixture
+
+This case must use the dedicated Riley Chen synthetic PDF and synthetic violin
+Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
+
+1. Generate `hirebeat-synthetic-resubmission-resume.pdf` with
+   `npm run acceptance:resubmission:resume:generate`. Upload it to the private
+   staging Google Drive folder and share only that file with the existing
+   staging Drive-reader service account.
+2. Run `npm run acceptance:resubmission:prepare` first. Review the redacted
+   dry-run plan, then rerun it with `--apply --confirm` and the exact printed
+   confirmation value. This creates one active synthetic violin Position through
+   the protected Operations API and publishes a Catalog revision. Record the
+   returned `position_id`; do not insert Catalog rows with manual SQL.
+3. Submit source record `staging-google-resubmission-001` using the returned
+   Position ID/name and the Riley Chen synthetic identity. Wait for Workflow B.
+   The Resume/JD pair is intentionally unrelated; require a stored score below
+   the active threshold and Application `completed + rejected`. If the reviewed
+   model revision produces a score at or above the threshold, stop the case and
+   revise the synthetic fixture instead of manually overwriting the decision.
+4. Submit the same file, Candidate identity, Company, Position, requested-start
+   month and Work Mode as source record `staging-google-resubmission-002`.
+5. Require the second Dedup run to be `succeeded + duplicate_detected +
+   admitted_resubmission`, with `submission_attempt_number = 2` and the first
+   normalized Submission selected as prior. Require a new Application, the old
+   rejected Application to be `superseded`, and the old Candidate execution to
+   be superseded. The test must not create or update an Offer for the original
+   Alex Morgan fixture.
+6. Redeliver either stable source record ID and verify Intake idempotency does
+   not create a third Raw Submission, Application, ML run, or Offer.
+
 ## 5. Workflow B, ML and decision
 
 1. A Candidate with zero Education but valid Resume/JD reaches ML without entity-count errors.
-2. Missing/short JD does not call similarity or create `no_offer`; the
-   Application remains `processing/pending`, Workflow B records
-   `waiting_position_jd`, and a later ready-JD Position update publishes an
-   idempotent requeue Outbox event. Zero Education, Employment, Skill, or
-   Project rows do not independently exclude the Application.
+2. If an active/ready Position loses readiness after Workflow A has created the
+   Application but before Workflow B calls ML, missing/short JD does not call
+   similarity or create `no_offer`; the Application remains
+   `processing/pending`, Workflow B records `waiting_position_jd`, and a later
+   ready-JD Position update publishes an idempotent requeue Outbox event. A
+   Position already draft or non-ready when Workflow A runs is blocked instead.
+   Zero Education, Employment, Skill, or Project rows do not independently
+   exclude the Application.
 3. While an Application is waiting for JD, admit an allowed resubmission and
    supersede the old Application. Then activate the Position with a valid JD.
    Verify the reconciler wakes only the current `processing + pending`
@@ -173,6 +211,35 @@ private source CSVs and generated preflight JSON remain ignored by Git.
 8. Inject a permanent Workflow contract error and verify `NonRetryableError`
    stops immediately. Inject a transient service error and verify the step uses
    no more than the configured total-attempt limit.
+
+### 5A. Isolated missing-JD and stale-waiter acceptance fixture
+
+1. Generate `hirebeat-synthetic-jd-waiting-resume.pdf` with
+   `npm run acceptance:jd-wait:resume:generate`, upload it to the private
+   staging Drive folder, and share only that file with the staging Drive-reader
+   service account.
+2. Run `npm run acceptance:jd-wait:prepare`, review the redacted dry run, then
+   apply it with the printed confirmation. Require a new `active` Position with
+   a ready JD and a published Catalog revision.
+3. Submit `staging-google-jd-wait-001` for Jordan Lee. After Workflow A succeeds
+   and creates the Application, but before Workflow B dispatches, run
+   `npm run acceptance:jd-wait:prepare -- --draft-position-id <ID>` as a dry
+   run and then apply it. This controlled choreography reproduces a Position
+   losing readiness after Application creation; submitting directly against an
+   already-draft Position is explicitly not allowed.
+4. Require Workflow B to become `waiting + waiting_position_jd`, with the
+   Application `processing + pending` and no ML run, recommendation, decision,
+   or Offer.
+5. Run `npm run acceptance:jd-wait:prepare -- --activate-position-id <ID>` as a
+   dry run, then apply it. The protected Position update must return
+   `resumed_waiting_workflow_count = 1`, rotate only the current Application
+   fence, cancel its old waiting database run, and publish one
+   `application.position_jd_ready` Outbox event.
+6. Require the restarted Workflow B to finish ML. Repeating the activation
+   command must be an idempotent reuse and create no additional recovery event.
+   Separately verify with a controlled database fixture that a superseded
+   historical waiter is excluded by the `processing + pending` and latest-run
+   predicates and receives no ML run, Offer, or current-pointer ownership.
 
 ## 6. Operations and Offer
 

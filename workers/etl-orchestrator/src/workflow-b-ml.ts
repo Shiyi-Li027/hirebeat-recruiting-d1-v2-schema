@@ -1,10 +1,12 @@
 import { sha256 } from "./crypto";
 import { calculateSimilarity } from "./ml-client";
 import type { OrchestratorEnv } from "./env";
+import { positionIsReadyForMl } from "./position-readiness";
 
 interface MlInput {
   application_id:number;candidate_snapshot_id:number;person_id:number;position_id:number;
   decision_fence_token:string;resume_text:string;resume_text_sha256:string;position_jd:string|null;
+  position_status:string;
   employment_count:number;education_count:number;skill_count:number;project_count:number;
 }
 
@@ -23,7 +25,8 @@ export interface MlRunResult {
 async function input(db:D1Database,applicationId:number,candidateSnapshotId:number,fence:string):Promise<MlInput>{
   const row=await db.prepare(
     `SELECT app.id application_id,candidate.id candidate_snapshot_id,candidate.person_id,app.position_id,
-            app.decision_fence_token,resume.resume_text,resume.resume_text_sha256,position.position_jd,
+            app.decision_fence_token,resume.resume_text,resume.resume_text_sha256,
+            position.position_status,position.position_jd,
             (SELECT COUNT(*) FROM candidate_position cp WHERE cp.candidate_snapshot_id=candidate.id) employment_count,
             (SELECT COUNT(*) FROM candidate_education ce WHERE ce.candidate_snapshot_id=candidate.id) education_count,
             (SELECT COUNT(*) FROM candidate_skill cs WHERE cs.candidate_snapshot_id=candidate.id) skill_count,
@@ -46,7 +49,7 @@ export async function executeMl(
 ):Promise<MlRunResult>{
   const source=await input(env.DB,applicationId,candidateSnapshotId,fence);
   const positionJd=source.position_jd?.trim()??"";
-  if(positionJd.length<10)throw new Error("position_jd_not_ready");
+  if(!positionIsReadyForMl(source.position_status,source.position_jd))throw new Error("position_jd_not_ready");
   const inputSnapshot=await sha256(JSON.stringify({
     candidateSnapshotId,
     decisionFenceToken:fence,

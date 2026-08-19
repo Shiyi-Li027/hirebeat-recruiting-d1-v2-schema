@@ -8,9 +8,19 @@ import hashlib
 from pathlib import Path
 
 
-DEFAULT_OUTPUT = Path(
-    "test-exports/staging/synthetic-inputs/hirebeat-synthetic-resume.pdf"
-)
+DEFAULT_OUTPUTS = {
+    "primary": Path(
+        "test-exports/staging/synthetic-inputs/hirebeat-synthetic-resume.pdf"
+    ),
+    "resubmission": Path(
+        "test-exports/staging/synthetic-inputs/"
+        "hirebeat-synthetic-resubmission-resume.pdf"
+    ),
+    "jd_waiting": Path(
+        "test-exports/staging/synthetic-inputs/"
+        "hirebeat-synthetic-jd-waiting-resume.pdf"
+    ),
+}
 
 RESUME_LINES = (
     "ALEX MORGAN",
@@ -38,14 +48,69 @@ RESUME_LINES = (
     "This PDF contains no real person, employer, credential, or contact data.",
 )
 
+RESUBMISSION_RESUME_LINES = (
+    "RILEY CHEN",
+    "Synthetic Resubmission Acceptance Applicant",
+    "riley.chen.synthetic@example.com | +1 202 555 0198",
+    "",
+    "SUMMARY",
+    "Data platform specialist with experience in Python, SQL, batch pipelines,",
+    "warehouse modeling, quality monitoring, and operational dashboards.",
+    "",
+    "SKILLS",
+    "Python, SQL, dbt, data warehouses, ETL, dashboards, Git, testing",
+    "",
+    "EXPERIENCE",
+    "Synthetic Data Systems | Data Engineer | 2024 - Present",
+    "Built scheduled ingestion pipelines and dimensional reporting models.",
+    "Implemented automated data checks and documented production incidents.",
+    "Maintained analytics datasets used by internal operations teams.",
+    "",
+    "EDUCATION",
+    "Example Technical College | Bachelor of Science in Information Systems | 2024",
+    "",
+    "PROJECTS",
+    "Created a synthetic warehouse monitoring project using Python and SQL.",
+    "This PDF contains no real person, employer, credential, or contact data.",
+)
+
+JD_WAITING_RESUME_LINES = (
+    "JORDAN LEE",
+    "Synthetic Position JD Recovery Applicant",
+    "jordan.lee.synthetic@example.com | +1 202 555 0176",
+    "",
+    "SUMMARY",
+    "Data quality analyst with experience in SQL, Python, validation rules,",
+    "pipeline monitoring, incident triage, and operational dashboards.",
+    "",
+    "SKILLS",
+    "Python, SQL, data quality, ETL, monitoring, dashboards, Git, testing",
+    "",
+    "EXPERIENCE",
+    "Synthetic Reliability Lab | Data Quality Analyst | 2024 - Present",
+    "Built automated validation checks for recurring ingestion pipelines.",
+    "Investigated data incidents and documented remediation outcomes.",
+    "Created monitoring dashboards for freshness and completeness metrics.",
+    "",
+    "PROJECTS",
+    "Created a synthetic data-quality monitoring project using Python and SQL.",
+    "This PDF contains no real person, employer, credential, or contact data.",
+)
+
+FIXTURES = {
+    "primary": RESUME_LINES,
+    "resubmission": RESUBMISSION_RESUME_LINES,
+    "jd_waiting": JD_WAITING_RESUME_LINES,
+}
+
 
 def pdf_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def build_pdf() -> bytes:
+def build_pdf(lines: tuple[str, ...]) -> bytes:
     commands = ["BT", "/F1 10 Tf", "48 760 Td", "14 TL"]
-    for index, line in enumerate(RESUME_LINES):
+    for index, line in enumerate(lines):
         if index:
             commands.append("T*")
         commands.append(f"({pdf_escape(line)}) Tj")
@@ -89,15 +154,18 @@ def build_pdf() -> bytes:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--fixture", choices=tuple(FIXTURES), default="primary")
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    payload = build_pdf()
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(payload)
+    output = args.output or DEFAULT_OUTPUTS[args.fixture]
+    payload = build_pdf(FIXTURES[args.fixture])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(payload)
     print(
         {
-            "path": str(args.output.resolve()),
+            "fixture": args.fixture,
+            "path": str(output.resolve()),
             "size_bytes": len(payload),
             "sha256": hashlib.sha256(payload).hexdigest(),
             "contains_real_person_data": False,

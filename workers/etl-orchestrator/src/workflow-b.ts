@@ -7,6 +7,7 @@ import { executeMl, type MlRunResult } from "./workflow-b-ml";
 import { finalizeMlDecision, type FinalDecisionResult } from "./workflow-b-finalize";
 import { loadOrchestratorConfiguration } from "./runtime-configuration";
 import { toWorkflowThrowable } from "./workflow-errors";
+import { positionIsReadyForMl } from "./position-readiness";
 
 export interface WorkflowBOutcome {
   status:"offer_created"|"rejected"|"waiting_position_jd"|"cancelled_stale";
@@ -50,15 +51,15 @@ export async function executeWorkflowB(
     const positionJdReady=await doConfigured("verify-position-jd-ready",()=>tracked(
       ledger,run.id,"verify_position_jd_ready","Verify Position JD is ready for ML",async()=>{
         const row=await env.DB.prepare(
-          `SELECT position.position_jd FROM application
+          `SELECT position.position_status,position.position_jd FROM application
            JOIN position ON position.id=application.position_id
            WHERE application.id=?1 AND application.current_candidate_snapshot_id=?2
              AND application.decision_fence_token=?3
              AND application.application_lifecycle_status='processing'
              AND application.application_decision_status='pending'`,
         ).bind(payload.applicationId,payload.candidateSnapshotId,payload.decisionFenceToken)
-          .first<{position_jd:string|null}>();
-        return Boolean(row?.position_jd&&row.position_jd.trim().length>=10);
+          .first<{position_status:string;position_jd:string|null}>();
+        return Boolean(row&&positionIsReadyForMl(row.position_status,row.position_jd));
       },
     ));
     if(!positionJdReady){

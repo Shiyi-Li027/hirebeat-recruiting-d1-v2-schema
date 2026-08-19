@@ -220,3 +220,34 @@ NULL` 的 Offer 不会被自动变为 `expired`。
 长期保持 `sent`/`viewed`”以及格式错误导致自动过期不可靠的业务治理风险。该风险
 属于 Offer 生命周期完整性问题，不应被解释为 Candidate、Application 或 ML 处理
 失败。
+
+## 13. Position JD 全文历史版本（按需增加）
+
+首版继续把 `position.position_jd` 作为当前权威岗位 JD，允许受控更新，并通过
+Position 更新审计、Catalog revision、Application/ML 输入快照和不可变结果保留
+首版所需的业务解释能力。暂时不增加 `position_revision`，也不改变现有 Position
+表、Workflow A/B、Catalog 或 ML 设计。
+
+如果将来出现“必须精确保留每一次历史 JD 全文，并能够证明某个时间点招聘方发布
+给申请人或提供给 ML 的完整 JD 内容”的真实要求，再通过新 migration 增加
+`position_revision`。建议届时至少考虑：
+
+```text
+position_id
+revision_number
+position_jd
+position_jd_sha256
+revision_status
+effective_from / effective_to
+change_reason
+created_by
+created_at
+```
+
+每个 revision 应 append-only，并由 Position 或发布记录指向当前 revision；已经被
+Application、ML run 或表单 Catalog 发布使用的 revision 不允许原地修改。JD 更新
+创建新 revision，旧 revision 保留用于审计、重放和争议解释。只有当全文历史查询、
+法律审计、模型可复现或多版本岗位发布成为明确需求时才引入该复杂度。
+
+因此最终决策是：如果将来要求精确保留每个历史 JD 全文版本，可以再增加
+`position_revision`；首版暂时不需要增加，不改变现有设计。

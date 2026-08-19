@@ -47,7 +47,9 @@ Position 的默认状态由 JD readiness 决定：
 - 未显式传入 `position_status` 且 JD trim 后至少 10 字符：`active`；
 - 未显式传入 `position_status` 且 JD 缺失或不足 10 字符：`draft`；
 - 显式传入状态时使用该状态，但 `active` 始终必须通过 JD readiness gate；
-- 无有效 JD 的 Position 不进入 Catalog options，也不能通过 Initial Cleaning。
+- 无有效 JD 的 Position 不进入 Catalog options。即使可信来源携带权威 Position
+  ID，Workflow A 仍按 D1 当前状态重新验证；`draft`、`paused`、`closed`、
+  `archived` 都在 Initial Cleaning 阻断，不创建 Application。
 
 人工 SQL 同样必须遵守上述推导，不允许简单省略 `position_status` 后依赖固定
 Schema default。D1/SQLite 的普通 `DEFAULT` 不能引用本行 `position_jd`，也无法区分
@@ -275,6 +277,12 @@ selected_company_id 存在且 company.is_active = 1
 selected_position_id 存在
 position.company_id = selected_company_id
 position.position_status = 'active'
+position.position_jd IS NOT NULL
+length(trim(position.position_jd)) >= 10
+
+只有 `active + position_jd trim 后至少 10 字符` 才能建立 Application。Workflow B
+仍会在调用 ML 前再次检查，以覆盖 Workflow A 成功后 Position 被撤回为 `draft`
+或失去 JD readiness 的并发时间窗。
 
 若 selected_company_work_mode_id 非 NULL：
   company_work_mode 存在
@@ -313,6 +321,13 @@ Position 新建默认 `draft`，发布验证成功后才改为 `active`。申请
 影响选项的 Company name/active、Position name/status、Company Work Mode 关系/active 变化，在短 D1 `batch()` 中更新 Catalog、创建 revision 和 `catalog_options_sync_requested` Outbox。联系人、薪资或 Requirement 变化不必同步表单选项，但仍审计；是否刷新 ML feature 在 G09 决定。
 
 原生 Airtable/Google Form 是否能为每个已打开窗口携带独立 revision 取决于 adapter/form 能力。首版边界：新打开/新同步入口使用最新 Catalog；已打开窗口可继续显示打开时选项；Raw 先落地；Initial Cleaning 最终复验；失效选项记为 `rejected_catalog_stale`，不进入 Application。
+
+字段级更新和下游反应的统一规则见
+`19_data_change_reaction_policy.md`。尤其是 Position：`id`、UUID 和已发布后的
+Company 归属不允许普通原地改写；名称修正必须同时重算 normalized name；status
+进入或离开 active 会改变 option-tree，必须创建新的 Catalog revision；JD 变化不
+追溯重算已经发布的 ML 结果。原来 active 的 Position 若要把 JD 改成不足 10 字符，
+同一受控命令必须显式把 status 改为 draft，不能让数据库猜测生命周期意图。
 
 ## 14. 与组员项目的差异
 

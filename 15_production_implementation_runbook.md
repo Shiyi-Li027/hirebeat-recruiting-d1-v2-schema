@@ -120,6 +120,11 @@ private source rows.
 
 - records with `is_active` default to active unless an authoring command explicitly supplies `false` or `0`;
 - Position defaults to `active` only when its JD passes the 10-character readiness gate; otherwise it defaults to `draft`.
+- `draft` Positions are excluded from published Catalog options and are blocked
+  by Workflow A even when a trusted source carries an authoritative Position
+  ID. Workflow A also blocks paused, closed, archived, missing, wrong-Company,
+  and non-ready-JD Positions using distinct reason codes. Workflow B retains a
+  second readiness check for a Position that changes after Application creation.
 - A later Position update that supplies a ready JD requeues every matching
   `waiting_position_jd` Application through an idempotent Outbox event and a
   newly rotated decision fence.
