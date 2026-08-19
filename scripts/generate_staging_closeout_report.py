@@ -48,6 +48,13 @@ ORCHESTRATOR_FAULT_SOURCE_RECORD_IDS = {
         "staging-google-fault-workflow-a-terminal-contract-001"
     ),
 }
+PROVIDER_BRIDGE_FILES = (
+    "provider-integrations/google-form/Code.js",
+    "provider-integrations/google-form/appsscript.json",
+    "provider-integrations/airtable/submission-automation.js",
+    "provider-integrations/airtable/catalog-sync-automation.js",
+    "20_provider_native_submission_windows.md",
+)
 
 
 def command(args: list[str]) -> str:
@@ -928,9 +935,13 @@ def main() -> int:
             outbox_terminal_boundaries_passed
         ),
         "workflow_step_fault_classification": workflow_step_faults_passed,
+        "provider_bridge_templates_present": all(
+            (ROOT / relative_path).is_file()
+            for relative_path in PROVIDER_BRIDGE_FILES
+        ),
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v7",
+        "schema_version": "hirebeat-staging-closeout-report-v8",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -950,7 +961,8 @@ def main() -> int:
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
+            "Configure the implemented provider bridges with the real staging Google Form and Airtable object IDs, protected secrets, and native synthetic evidence.",
+            "Wire durable catalog_sync_run/catalog_sync_target_run result reporting before production provider enablement.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],
     }

@@ -86,6 +86,7 @@ Responsibility boundary:
 - The bucket remains private; resumes must not be exposed through a public bucket URL.
 - The R2 service uses `raw-resumes/v1/{submission_uuid}/{resume_file_sha256}.pdf`, conditional create semantics, and metadata verification on technical redelivery.
 - `workers/submission-ingress/` connects the canonical intake contract, Airtable/Google adapters, bounded PDF acquisition, Google service-account Drive authentication, SHA-256, conditional R2 storage, authenticated Parser call, D1 intake fencing, atomic Raw/Resume/Outbox publication, and retry/terminal-failure accounting.
+- `provider-integrations/` contains credential-free Google Form bound-script and Airtable Automation templates for native Catalog choices and authenticated submission delivery; read `20_provider_native_submission_windows.md` before configuring an external object.
 
 ## Confirmed schema groups / 已确认分组
 
@@ -373,8 +374,8 @@ explicitly redacted samples may be committed.
 ## Remaining deployment prerequisites and deferred work / 尚待外部配置与后续增强
 
 - Configure private Parser and ML service URLs, authentication Secrets, Cloudflare Access team domain/AUD, and source credentials before remote Worker deployment.
-- Connect each native Airtable Automation / Google Apps Script producer to its authenticated Ingress route.
-- Implement provider-specific Catalog option writers after the exact Airtable base and Google Form IDs are available; D1 Catalog revision publication is implemented.
+- Configure the implemented Airtable Automation / Google Apps Script templates against the real staging Base/Form IDs and protected secrets.
+- Execute one provider-native synthetic submission per channel and add durable `catalog_sync_run` / `catalog_sync_target_run` reporting before production enablement.
 - Run staging end-to-end tests for empty database, first submission, technical redelivery, intentional resubmission, supersession fence, rejection, Offer creation/versioning, and terminal recovery before creating isolated production resources.
 - ML model/version expansion, chunked long-text embedding, Position-level work mode, reference-data releases, and external Offer document/e-signature integration remain deliberately deferred.
 
@@ -392,6 +393,7 @@ See [`03_future_optimization_recommendations.md`](03_future_optimization_recomme
 - [`14_remaining_production_decisions.md`](14_remaining_production_decisions.md): frozen D01-D15 production decisions
 - [`15_production_implementation_runbook.md`](15_production_implementation_runbook.md): implemented runtime flow, APIs, required bindings/Secrets, validation and deployment gates
 - [`16_runtime_three_way_comparison.md`](16_runtime_three_way_comparison.md): runtime-level differences from the legacy Colab flow and teammate Worker
+- [`20_provider_native_submission_windows.md`](20_provider_native_submission_windows.md): native Google Form/Airtable contracts, secure bridge setup, stale-window behavior, and activation gates
 - [`test-exports/README.md`](test-exports/README.md): centralized inspection-export directory and PII boundary
 
 ## License

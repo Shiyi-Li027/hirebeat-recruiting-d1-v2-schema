@@ -1,6 +1,6 @@
 # HireBeat 新 D1 数据库与 Workflow 未来优化建议
 
-版本日期：2026-08-17  
+版本日期：2026-08-19
 用途：记录已讨论但明确不进入首版 Schema/Workflow 的能力。只有出现真实数据、业务需求和验证结果后，才通过 migration 与新版 Workflow 引入。
 
 ## 1. ML 多模型版本与部署治理
@@ -140,7 +140,7 @@ Parser timeout = 正常成功请求的 p99 延迟 + 安全余量
 
 ## 11. 外部 Reference/Catalog 来源身份与 Source-aware Upsert
 
-首版暂不建设 Airtable、Google Form/Sheets 或其他外部系统的 G01 Reference、G02 Company/Position 管理提交窗口和自动同步流程，因此不提前创建 `company_source_identity`、`position_source_identity`，也不实现通用 source-aware upsert。当前受控管理路径继续使用 Operations API 的显式 `POST`/`PATCH`、内部稳定 UUID、命令幂等键、`audit_event` 和 `catalog_revision`。
+当前 provider-native 阶段已经提供 Airtable、Google Form 的申请入口桥接和 G02 Catalog 选项写入模板，但没有把外部系统升级为 G01 Reference 或 G02 Company/Position 的权威管理来源。因此仍不创建 `company_source_identity`、`position_source_identity`，也不实现通用 source-aware upsert。当前受控管理路径继续使用 Operations API 的显式 `POST`/`PATCH`、内部稳定 UUID、命令幂等键、`audit_event` 和 `catalog_revision`；provider 只消费已发布的目录快照并投递申请。
 
 只有未来确认外部 Catalog/Reference 同步渠道、能够取得可靠的来源记录身份，并明确字段所有权后，才通过新 migration 增加来源映射。建议的核心信息包括：
 
@@ -179,14 +179,14 @@ UNIQUE(source_system, source_record_id)
 
 ### 外部 Catalog 同步的目标级 Queue / Outbox
 
-将来正式启用 Airtable、Google Form 或其他 Catalog external sync 时，应为每个实际同步目标建立独立 Queue 或 Outbox 投递记录，而不是用一条全局成功状态代表全部渠道。每条目标记录冻结 `catalog_revision_id`、目标系统与表单/视图身份、幂等键、attempt、lease、next attempt 和最终状态。Airtable 成功但 Google 失败时只重试 Google；429、5xx 和网络错误自动退避，权限、字段映射、目标删除等永久错误直接 terminal/DLQ。该能力届时通过新 migration 增加，当前版本不提前创建来源窗口或目标表。
+正式启用 Airtable、Google Form 或其他 Catalog external sync 时，应为每个实际同步目标建立独立 Queue 或 Outbox 投递记录，而不是用一条全局成功状态代表全部渠道。初始 Schema 已有 `catalog_sync_run` 与 `catalog_sync_target_run`，可冻结 `catalog_revision_id`、目标系统与表单/视图身份、attempt、next attempt 和最终状态；当前尚缺把 provider 执行结果可靠写入这两张表的 command/dispatcher。Airtable 成功但 Google 失败时只重试 Google；429、5xx 和网络错误自动退避，权限、字段映射、目标删除等永久错误直接 terminal/DLQ。只有在现有列不足以表达 lease、逐目标幂等键或 DLQ 关联时才增加 migration，不能错误地重复创建已经存在的目标表。
 
 该未来能力还必须遵守当前自动恢复策略的共同语义：`max_attempts`
 表示包括首次在内的总尝试次数；每个目标独立幂等、独立 lease、独立退避、
 独立 terminal 状态；不能因为一个目标失败而回滚已经成功的其他目标，也不能
 通过删除 `catalog_revision` 来“回滚”外部系统。恢复方式应是重试失败目标或发布
-新的 revision/补偿事件。具体设计在外部同步渠道真正启用时再通过新 migration
-与独立验收用例落地。
+新的 revision/补偿事件。具体 command、dispatcher 和独立验收用例必须在外部
+同步渠道正式启用前落地；是否需要 migration 由现有字段差距决定。
 
 ## 12. Offer 回复期限治理与自动过期门禁
 

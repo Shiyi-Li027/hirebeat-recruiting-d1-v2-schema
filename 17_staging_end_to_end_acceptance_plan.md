@@ -476,3 +476,23 @@ zones, and records the current three Worker deployments. Its ignored JSON output
 distinguishes the passing core synthetic path from provider-native
 configuration and production approval that remain outside the current scope;
 it must never convert an unexecuted gate into a pass.
+
+## 8. Provider-native staging acceptance
+
+After configuring the objects in `20_provider_native_submission_windows.md`:
+
+1. synchronize Google choices and verify every visible choice contains the
+   current revision plus a valid Position and Company Work Mode ID;
+2. open a Form page, publish a newer Catalog revision, resynchronize, and then
+   submit the already-open page; verify Raw preservation plus Workflow A's
+   current-state decision;
+3. deliver the same Google Form response twice and verify one logical Intake
+   run and one Raw publication;
+4. synchronize the Airtable Position mirror and verify active rows match the
+   latest D1 option tree while removed rows are inactive rather than deleted;
+5. submit one synthetic Airtable Form record twice through Automation replay
+   and verify one logical Intake run and one Raw publication;
+6. verify both source identities use the documented namespaced native
+   record/response IDs;
+7. run `PRAGMA foreign_key_check` and retain provider execution logs without
+   exporting applicant content or any secret.

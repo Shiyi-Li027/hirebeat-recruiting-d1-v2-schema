@@ -208,12 +208,21 @@ PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/te
 
 Then apply migrations in staging, deploy both Python services privately, configure Worker Secrets/variables, deploy the three Workers, and execute synthetic end-to-end cases. Production uses separate D1, R2, Workers, Workflows, service URLs and Secrets; staging resources must never be rebound as production.
 
-## 7. Still externally blocked, not missing code
+## 7. Provider-native staging activation
 
-- Exact Airtable base/table/field IDs and Automation webhook configuration.
-- Exact Google Form/Sheet IDs and Apps Script deployment.
+The credential-free provider bridge templates and historical Catalog revision
+read endpoint are implemented. Follow
+`20_provider_native_submission_windows.md`; do not paste provider credentials
+or object IDs into tracked source files. Google uses the Form-specific
+installable submit trigger, and Airtable uses a server-side Automation Run a
+script action.
+
+## 8. Still externally blocked, not missing code
+
+- Exact Airtable base/table/field IDs and enabling the two reviewed Automations.
+- Exact Google Form ID, bound Apps Script installation and submit-trigger grant.
 - Private hosting URLs for Parser and ML containers.
 - Cloudflare Access application team domain, AUD, member group and Author policy.
-- Provider-specific writing of a published `catalog_revision` into native Airtable/Google form options.
+- Provider target credentials and final `catalog_sync_run` / `catalog_sync_target_run` result reporting.
 
 These values cannot be safely invented in source code. Their absence must block remote enablement, not weaken authentication or silently use defaults.

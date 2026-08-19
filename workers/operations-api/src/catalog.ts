@@ -156,6 +156,29 @@ export async function catalogOptions(db:D1Database):Promise<Record<string,unknow
   return{revision,companies,company_work_modes:workModes,positions};
 }
 
+export async function catalogRevisionOptions(db:D1Database,revisionNumber:number):Promise<Record<string,unknown>>{
+  const revision=await db.prepare(
+    `SELECT id,revision_number,snapshot_sha256,catalog_snapshot_json,created_at
+     FROM catalog_revision WHERE revision_number=?1`,
+  ).bind(revisionNumber).first<{
+    id:number;revision_number:number;snapshot_sha256:string;
+    catalog_snapshot_json:string;created_at:string;
+  }>();
+  if(!revision)throw new Error("catalog_revision_not_found");
+  let snapshot:unknown;
+  try{snapshot=JSON.parse(revision.catalog_snapshot_json);}catch{throw new Error("catalog_revision_snapshot_invalid");}
+  if(!snapshot||typeof snapshot!=="object"||Array.isArray(snapshot))throw new Error("catalog_revision_snapshot_invalid");
+  return{
+    revision:{
+      id:revision.id,
+      revision_number:revision.revision_number,
+      snapshot_sha256:revision.snapshot_sha256,
+      created_at:revision.created_at,
+    },
+    ...(snapshot as Record<string,unknown>),
+  };
+}
+
 export async function publishCatalogRevision(db:D1Database,body:Record<string,unknown>,actor:string):Promise<Record<string,unknown>>{
   const key=commandKey(body);const eventType="command.catalog.revision.publish";const prior=await replay(db,eventType,key);if(prior)return{...prior,idempotent_reuse:true};
   const snapshot=await catalogOptions(db);delete snapshot.revision;const snapshotJson=JSON.stringify(snapshot);const snapshotHash=await sha256(snapshotJson);

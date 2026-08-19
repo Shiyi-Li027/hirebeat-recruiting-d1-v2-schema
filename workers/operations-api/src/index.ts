@@ -1,5 +1,5 @@
 import { authenticateAccess } from "./access-auth";
-import { catalogOptions, createCompany, createCompanyWorkMode, createPosition, publishCatalogRevision, updateCompany, updatePosition } from "./catalog";
+import { catalogOptions, catalogRevisionOptions, createCompany, createCompanyWorkMode, createPosition, publishCatalogRevision, updateCompany, updatePosition } from "./catalog";
 import { jsonBody, requirePositiveInteger, response } from "./helpers";
 import { transitionOffer } from "./offer-state";
 import { requestMlRecommendation } from "./hiring-command";
@@ -33,6 +33,8 @@ export default {
       const childState=url.pathname.match(/^\/v1\/catalog\/children\/([a-z0-9_]+)\/(\d+)\/active-state$/);
       if(request.method==="PATCH"&&childState)return response(await setCatalogChildActive(env.DB,childState[1],requirePositiveInteger(childState[2],"path_id"),await jsonBody(request),auth.actor));
       if(request.method==="GET"&&url.pathname==="/v1/catalog/options")return response(await catalogOptions(env.DB));
+      const revisionOptions=url.pathname.match(/^\/v1\/catalog\/revisions\/(\d+)\/options$/);
+      if(request.method==="GET"&&revisionOptions)return response(await catalogRevisionOptions(env.DB,requirePositiveInteger(revisionOptions[1],"revision_number")));
       if(request.method==="POST"&&url.pathname==="/v1/catalog/companies")return response(await createCompany(env.DB,await jsonBody(request),auth.actor),201);
       const companyId=idFromPath(url.pathname,/^\/v1\/catalog\/companies\/(\d+)$/);
       if(request.method==="PATCH"&&companyId)return response(await updateCompany(env.DB,companyId,await jsonBody(request),auth.actor));
