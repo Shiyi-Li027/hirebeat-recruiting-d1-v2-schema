@@ -150,6 +150,20 @@ private source CSVs and generated preflight JSON remain ignored by Git.
    Queue message from the previous cycle and verify the recovery-fence mismatch
    makes it a no-op.
 
+Recorded Staging evidence for step 4 on 2026-08-19:
+
+- The protected negative-boundary runner submitted an authenticated malformed
+  Google envelope and received HTTP 422 with `source_fields_missing`.
+- The same runner submitted an otherwise equivalent request with invalid
+  internal authentication and received HTTP 401 with
+  `invalid_internal_authentication`.
+- Neither rejected request persisted an authentication token or Resume body.
+  A subsequent remote D1 inspection found zero Intake runs, Raw Submissions,
+  Resume rows, related Outbox events and Workflow runs for source record
+  `staging-google-malformed-envelope-001`. The foreign-key check was clean.
+- Unit acceptance also covers an integrity-HMAC mismatch at Queue consumption:
+  it is terminally acknowledged without Queue retry or Intake publication.
+
 Recorded Staging evidence for step 5 on 2026-08-19:
 
 - Two simultaneous authenticated submissions used the same new Google source

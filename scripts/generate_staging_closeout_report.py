@@ -103,6 +103,10 @@ def main() -> int:
         "--intake-concurrency-source-record-id",
         default="staging-google-intake-concurrency-001",
     )
+    parser.add_argument(
+        "--malformed-envelope-source-record-id",
+        default="staging-google-malformed-envelope-001",
+    )
     parser.add_argument("--workflow-a-uuid", required=True)
     parser.add_argument("--workflow-b-uuid", required=True)
     parser.add_argument("--offer-concurrency-id", type=int, default=2)
@@ -119,6 +123,9 @@ def main() -> int:
     source = quote(args.source_record_id)
     intake_concurrency_source = quote(
         args.intake_concurrency_source_record_id
+    )
+    malformed_envelope_source = quote(
+        args.malformed_envelope_source_record_id
     )
     workflow_a = quote(args.workflow_a_uuid)
     workflow_b = quote(args.workflow_b_uuid)
@@ -339,6 +346,31 @@ def main() -> int:
           AND intake.source_record_id={intake_concurrency_source};""",
         True,
     )
+    malformed_envelope = execute(
+        f"""WITH target_intake AS (
+          SELECT id FROM raw_submission_intake_run
+           WHERE source_system='google_form'
+             AND source_record_id={malformed_envelope_source}
+        ), target_raw AS (
+          SELECT id FROM raw_submission
+           WHERE raw_submission_intake_run_id IN (
+             SELECT id FROM target_intake)
+        )
+        SELECT
+          (SELECT COUNT(*) FROM target_intake) AS intake_run_count,
+          (SELECT COUNT(*) FROM target_raw) AS raw_submission_count,
+          (SELECT COUNT(*) FROM raw_submission_resume
+            WHERE raw_submission_id IN (SELECT id FROM target_raw))
+            AS resume_count,
+          (SELECT COUNT(*) FROM outbox_event
+            WHERE aggregate_type='raw_submission'
+              AND aggregate_id IN (SELECT id FROM target_raw))
+            AS outbox_event_count,
+          (SELECT COUNT(*) FROM etl_workflow_run
+            WHERE raw_submission_id IN (SELECT id FROM target_raw))
+            AS workflow_run_count;""",
+        True,
+    )
 
     expected_case = {
         "intake_status": "succeeded",
@@ -418,6 +450,19 @@ def main() -> int:
             and intake_fence["dedup_run_count"] == 1
             and intake_fence["application_lineage_count"] <= 1
         )
+    malformed_envelope_zero_write_passed = len(malformed_envelope) == 1
+    if malformed_envelope_zero_write_passed:
+        malformed_fence = malformed_envelope[0]
+        malformed_envelope_zero_write_passed = all(
+            malformed_fence[key] == 0
+            for key in (
+                "intake_run_count",
+                "raw_submission_count",
+                "resume_count",
+                "outbox_event_count",
+                "workflow_run_count",
+            )
+        )
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -456,9 +501,12 @@ def main() -> int:
         "inspection_manifests": all(item["passed"] for item in manifests),
         "offer_status_concurrency_fence": concurrency_passed,
         "intake_concurrent_redelivery_fence": intake_concurrency_passed,
+        "malformed_envelope_zero_write_fence": (
+            malformed_envelope_zero_write_passed
+        ),
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v3",
+        "schema_version": "hirebeat-staging-closeout-report-v4",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -470,10 +518,11 @@ def main() -> int:
         "synthetic_case_evidence": synthetic_case,
         "offer_status_concurrency_evidence": offer_concurrency,
         "intake_concurrency_evidence": intake_concurrency,
+        "malformed_envelope_evidence": malformed_envelope,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete still-unexecuted source/Parser fault injection, invalid-envelope, and Workflow/Outbox retry cases listed in acceptance-plan sections 2, 3, 3A, and 5.",
+            "Complete still-unexecuted source/Parser fault injection and Workflow/Outbox retry cases listed in acceptance-plan sections 2, 3, 3A, and 5.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],
