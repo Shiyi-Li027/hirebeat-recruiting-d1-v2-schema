@@ -14,6 +14,7 @@
     "acceptance:enrichment:resume:generate": "python3 scripts/generate_synthetic_resume_pdf.py --fixture enrichment",
     "acceptance:enrichment:prepare": "python3 scripts/prepare_candidate_enrichment_acceptance.py",
     "acceptance:intake:google": "python3 scripts/submit_synthetic_google_staging_intake.py",
+    "acceptance:intake:negative": "python3 scripts/submit_negative_ingress_staging.py",
     "test": "npm run schema:validate && npm run time-policy:test && npm run cloud-run-auth:test && npm run ingress:test && npm run orchestrator:test && npm run operations:test && npm run workers:build",
     "time-policy:test": "python3 -m unittest scripts/test_time_policy.py",
     "cloud-run-auth:test": "esbuild workers/shared/test/google-cloud-run-id-token.test.ts --bundle --platform=node --format=esm --outfile=/tmp/hirebeat-cloud-run-id-token-test.mjs && node /tmp/hirebeat-cloud-run-id-token-test.mjs && rm -f /tmp/hirebeat-cloud-run-id-token-test.mjs",
