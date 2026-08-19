@@ -26,6 +26,14 @@ export function primaryMatchRule(match: Pick<MatchRow,"email_count"|"phone_count
   throw new Error("dedup_match_has_no_supported_primary_rule");
 }
 
+export function evidenceTypeForFeature(featureType:string):string{
+  if(featureType==="email")return "email_exact_match";
+  if(featureType==="phone")return "phone_last_10_exact_match";
+  if(featureType==="linkedin_url")return "linkedin_exact_match";
+  if(featureType==="github_url")return "github_exact_match_with_same_normalized_last_name";
+  throw new Error(`unsupported_identity_feature_type:${featureType}`);
+}
+
 export async function runDedup(
   db:D1Database,workflowRunId:number,stepRunId:number,submissionNormalizedId:number,
   hmacSecret:string,
@@ -97,17 +105,30 @@ export async function runDedup(
             SUM(CASE WHEN target_feature.feature_type='github_url' AND target.normalized_last_name=prior.normalized_last_name THEN 1 ELSE 0 END) github_count,
             SUM(CASE WHEN target_feature.feature_type IN ('email','phone','linkedin_url') THEN 1 ELSE 0 END) strong_count,
             SUM(CASE WHEN target_feature.feature_type='github_url' AND target.normalized_last_name=prior.normalized_last_name THEN 1 ELSE 0 END) resume_count,
-            COUNT(*) total_count
+            SUM(CASE
+              WHEN target_feature.feature_type IN ('email','phone','linkedin_url') THEN 1
+              WHEN target_feature.feature_type='github_url'
+               AND target.normalized_last_name=prior.normalized_last_name THEN 1
+              ELSE 0 END) total_count
      FROM submission_normalized target
      JOIN submission_normalized prior
        ON prior.company_id=target.company_id AND prior.position_id=target.position_id
       AND prior.requested_start_year_month=target.requested_start_year_month AND prior.id<>target.id
      JOIN raw_submission raw ON raw.id=prior.raw_submission_id
-     JOIN submission_identity_feature target_feature ON target_feature.submission_normalized_id=target.id
-     JOIN submission_identity_feature prior_feature
+     JOIN (
+       SELECT DISTINCT submission_normalized_id,feature_type,
+                       normalized_value_hmac,hmac_key_version
+       FROM submission_identity_feature
+     ) target_feature ON target_feature.submission_normalized_id=target.id
+     JOIN (
+       SELECT DISTINCT submission_normalized_id,feature_type,
+                       normalized_value_hmac,hmac_key_version
+       FROM submission_identity_feature
+     ) prior_feature
        ON prior_feature.submission_normalized_id=prior.id
       AND prior_feature.feature_type=target_feature.feature_type
       AND prior_feature.normalized_value_hmac=target_feature.normalized_value_hmac
+      AND prior_feature.hmac_key_version=target_feature.hmac_key_version
      WHERE target.id=?1
      GROUP BY prior.id
      HAVING strong_count>0 OR resume_count>0
@@ -132,22 +153,33 @@ export async function runDedup(
     const matchId=await db.prepare(`SELECT id FROM submission_dedup_match WHERE dedup_match_uuid=?1`).bind(matchUuid).first<{id:number}>();
     if(!matchId)throw new Error("dedup_match_create_failed");
     const evidence=await db.prepare(
-      `SELECT target_feature.id target_id,prior_feature.id prior_id,
+      `SELECT MIN(target_feature.id) target_id,MIN(prior_feature.id) prior_id,
               target_feature.feature_type,target_feature.normalized_value_hmac,target_feature.hmac_key_version
        FROM submission_identity_feature target_feature
        JOIN submission_identity_feature prior_feature
          ON prior_feature.submission_normalized_id=?2
         AND prior_feature.feature_type=target_feature.feature_type
         AND prior_feature.normalized_value_hmac=target_feature.normalized_value_hmac
+        AND prior_feature.hmac_key_version=target_feature.hmac_key_version
+       JOIN submission_normalized target_submission
+         ON target_submission.id=target_feature.submission_normalized_id
+       JOIN submission_normalized prior_submission
+         ON prior_submission.id=prior_feature.submission_normalized_id
        WHERE target_feature.submission_normalized_id=?1
+         AND (
+           target_feature.feature_type<>'github_url'
+           OR (
+             target_submission.normalized_last_name IS NOT NULL
+             AND target_submission.normalized_last_name=prior_submission.normalized_last_name
+           )
+         )
+       GROUP BY target_feature.feature_type,target_feature.normalized_value_hmac,
+                target_feature.hmac_key_version
        ORDER BY CASE target_feature.feature_type
          WHEN 'email' THEN 1 WHEN 'phone' THEN 2 WHEN 'linkedin_url' THEN 3 ELSE 4 END`,
     ).bind(submissionNormalizedId,match.prior_id).all<{target_id:number;prior_id:number;feature_type:string;normalized_value_hmac:string;hmac_key_version:string}>();
-    let evidenceOrder=0;
     for(const item of evidence.results){
-      if(item.feature_type==="github_url" && !target.normalized_last_name)continue;
-      evidenceOrder+=1;
-      const evidenceType=item.feature_type==="email"?"email_exact_match":item.feature_type==="phone"?"phone_last_10_exact_match":item.feature_type==="linkedin_url"?"linkedin_exact_match":"github_exact_match_with_same_normalized_last_name";
+      const evidenceType=evidenceTypeForFeature(item.feature_type);
       const githubLastNameHmac=item.feature_type==="github_url"&&target.normalized_last_name?await keyedHmac(target.normalized_last_name,hmacSecret):null;
       await db.prepare(
       `INSERT INTO submission_match_evidence (
