@@ -1,6 +1,6 @@
 # Data Change Reaction Policy
 
-Version date: 2026-08-19  
+Version date: 2026-08-19
 Status: confirmed design policy
 
 ## 1. Purpose
