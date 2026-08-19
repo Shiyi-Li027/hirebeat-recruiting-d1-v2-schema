@@ -99,6 +99,10 @@ def main() -> int:
     parser.add_argument(
         "--source-record-id", default="staging-google-enrichment-001"
     )
+    parser.add_argument(
+        "--intake-concurrency-source-record-id",
+        default="staging-google-intake-concurrency-001",
+    )
     parser.add_argument("--workflow-a-uuid", required=True)
     parser.add_argument("--workflow-b-uuid", required=True)
     parser.add_argument("--offer-concurrency-id", type=int, default=2)
@@ -113,6 +117,9 @@ def main() -> int:
     args = parser.parse_args()
 
     source = quote(args.source_record_id)
+    intake_concurrency_source = quote(
+        args.intake_concurrency_source_record_id
+    )
     workflow_a = quote(args.workflow_a_uuid)
     workflow_b = quote(args.workflow_b_uuid)
     offer_concurrency_id = args.offer_concurrency_id
@@ -250,6 +257,88 @@ def main() -> int:
         WHERE offer.id={offer_concurrency_id};""",
         True,
     )
+    intake_concurrency = execute(
+        f"""SELECT
+          intake.id AS intake_run_id,
+          intake.submission_uuid,
+          intake.intake_status,
+          intake.attempt_count,
+          intake.technical_redelivery_count,
+          intake.last_technical_redelivery_mechanism,
+          intake.last_technical_redelivery_cause_code,
+          intake.last_error_code,
+          (SELECT COUNT(*) FROM raw_submission AS raw
+            WHERE raw.raw_submission_intake_run_id=intake.id)
+            AS raw_submission_count,
+          (SELECT COUNT(*) FROM raw_submission_resume AS resume
+            WHERE resume.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS resume_count,
+          (SELECT COUNT(DISTINCT resume.resume_r2_object_key)
+             FROM raw_submission_resume AS resume
+            WHERE resume.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS distinct_resume_r2_key_count,
+          (SELECT COUNT(*) FROM outbox_event AS outbox
+            WHERE outbox.aggregate_type='raw_submission'
+              AND outbox.event_type='raw_submission.published'
+              AND outbox.aggregate_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS raw_published_outbox_count,
+          (SELECT COUNT(*) FROM outbox_event AS outbox
+            WHERE outbox.aggregate_type='raw_submission'
+              AND outbox.event_type='raw_submission.published'
+              AND outbox.dispatch_status='published'
+              AND outbox.aggregate_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS published_raw_outbox_count,
+          (SELECT COUNT(*) FROM etl_workflow_run AS workflow
+            WHERE workflow.workflow_type='workflow_a'
+              AND workflow.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS workflow_a_count,
+          (SELECT COUNT(*) FROM etl_workflow_run AS workflow
+            WHERE workflow.workflow_type='workflow_a'
+              AND workflow.workflow_status='succeeded'
+              AND workflow.run_attempt_count=1
+              AND workflow.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS succeeded_single_attempt_workflow_a_count,
+          (SELECT COUNT(*) FROM submission_normalized AS normalized
+            WHERE normalized.raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS normalized_count,
+          (SELECT COUNT(*) FROM resume_extraction AS extraction
+            WHERE extraction.submission_normalized_id IN (
+              SELECT normalized.id FROM submission_normalized AS normalized
+              WHERE normalized.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id)))
+            AS resume_extraction_count,
+          (SELECT COUNT(*) FROM submission_dedup_run AS dedup
+            WHERE dedup.target_submission_normalized_id IN (
+              SELECT normalized.id FROM submission_normalized AS normalized
+              WHERE normalized.raw_submission_id IN (
+                SELECT raw.id FROM raw_submission AS raw
+                WHERE raw.raw_submission_intake_run_id=intake.id)))
+            AS dedup_run_count,
+          (SELECT COUNT(*) FROM application_source_lineage AS lineage
+            WHERE lineage.source_raw_submission_id IN (
+              SELECT raw.id FROM raw_submission AS raw
+              WHERE raw.raw_submission_intake_run_id=intake.id))
+            AS application_lineage_count
+        FROM raw_submission_intake_run AS intake
+        WHERE intake.source_system='google_form'
+          AND intake.source_record_id={intake_concurrency_source};""",
+        True,
+    )
 
     expected_case = {
         "intake_status": "succeeded",
@@ -309,6 +398,26 @@ def main() -> int:
                 args.offer_concurrency_declined_key,
             }
         )
+    intake_concurrency_passed = len(intake_concurrency) == 1
+    if intake_concurrency_passed:
+        intake_fence = intake_concurrency[0]
+        intake_concurrency_passed = (
+            intake_fence["intake_status"] == "succeeded"
+            and intake_fence["attempt_count"] == 1
+            and intake_fence["technical_redelivery_count"] >= 1
+            and intake_fence["last_error_code"] is None
+            and intake_fence["raw_submission_count"] == 1
+            and intake_fence["resume_count"] == 1
+            and intake_fence["distinct_resume_r2_key_count"] == 1
+            and intake_fence["raw_published_outbox_count"] == 1
+            and intake_fence["published_raw_outbox_count"] == 1
+            and intake_fence["workflow_a_count"] == 1
+            and intake_fence["succeeded_single_attempt_workflow_a_count"] == 1
+            and intake_fence["normalized_count"] == 1
+            and intake_fence["resume_extraction_count"] == 1
+            and intake_fence["dedup_run_count"] == 1
+            and intake_fence["application_lineage_count"] <= 1
+        )
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -346,9 +455,10 @@ def main() -> int:
         "workflow_pair": workflow_passed,
         "inspection_manifests": all(item["passed"] for item in manifests),
         "offer_status_concurrency_fence": concurrency_passed,
+        "intake_concurrent_redelivery_fence": intake_concurrency_passed,
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v2",
+        "schema_version": "hirebeat-staging-closeout-report-v3",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -359,10 +469,11 @@ def main() -> int:
         "workflow_evidence": workflows,
         "synthetic_case_evidence": synthetic_case,
         "offer_status_concurrency_evidence": offer_concurrency,
+        "intake_concurrency_evidence": intake_concurrency,
         "inspection_manifest_evidence": manifests,
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Complete any still-unexecuted fault-injection and intake/workflow concurrency cases listed in acceptance-plan sections 2, 3A, and 5.",
+            "Complete still-unexecuted source/Parser fault injection, invalid-envelope, and Workflow/Outbox retry cases listed in acceptance-plan sections 2, 3, 3A, and 5.",
             "Complete provider-native Airtable/Form configuration when those submission windows enter scope.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],

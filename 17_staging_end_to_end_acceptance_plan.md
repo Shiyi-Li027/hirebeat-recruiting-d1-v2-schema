@@ -150,6 +150,22 @@ private source CSVs and generated preflight JSON remain ignored by Git.
    Queue message from the previous cycle and verify the recovery-fence mismatch
    makes it a no-op.
 
+Recorded Staging evidence for step 5 on 2026-08-19:
+
+- Two simultaneous authenticated submissions used the same new Google source
+  record ID and returned HTTP 202 with the same deterministic Submission UUID.
+- The Intake fence admitted one processing attempt and recorded the competing
+  message as one technical redelivery. Because arrival order is deliberately
+  nondeterministic, a later request declaring `initial_delivery` is
+  conservatively recorded as `unknown_technical_redelivery` with
+  `repeated_identity_marked_initial_delivery` rather than inventing a provider
+  retry cause.
+- The completed case contains exactly one Intake run, Raw Submission, Resume
+  row and R2 object key, one published `raw_submission.published` Outbox event,
+  one single-attempt successful Workflow A, one normalized row, one Resume
+  extraction and one Dedup run. It produced no duplicate Application lineage
+  and passed the foreign-key check.
+
 ## 4. Deduplication and resubmission
 
 1. Verify grouping by authoritative Company ID, Position ID and requested start `YYYY-MM`.
@@ -333,9 +349,9 @@ Recorded Staging evidence for item 2 on 2026-08-19:
 After exporting the selected Workflow A and Workflow B evidence, generate the
 read-only closeout snapshot with `npm run acceptance:closeout:staging`. The
 command verifies foreign keys, migration currency, the clean Git worktree, the
-synthetic enrichment/idempotency boundary, both Workflow results, the Offer
-status concurrency fence, export manifest hashes and time zones, and records
-the current three Worker deployments. Its ignored JSON output deliberately
+synthetic enrichment/idempotency boundary, both Workflow results, the Intake
+redelivery and Offer-status concurrency fences, export manifest hashes and time
+zones, and records the current three Worker deployments. Its ignored JSON output deliberately
 distinguishes the passing core synthetic path from provider-native
 configuration and production approval that remain outside the current scope;
 it must never convert an unexecuted gate into a pass.
