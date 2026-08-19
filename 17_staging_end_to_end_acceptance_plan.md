@@ -15,7 +15,8 @@ This plan is the release gate between a bundle-valid implementation and producti
   hostname at the edge; every authoring route requires both Access admission
   and the Worker's own verified Access JWT;
 - R2 is private and no resume object has a public URL;
-- migrations `0001` through `0013` are applied and `PRAGMA foreign_key_check` is empty.
+- migrations `0001` through `0014` are applied and `PRAGMA foreign_key_check` is empty;
+- the active configuration is `hirebeat-system-configuration-v3`, with UTC storage and `America/New_York` business display.
 
 ## 2. Ingress and Raw publication
 
@@ -265,6 +266,11 @@ Position. It must not mutate or reuse the existing Alex Morgan Offer chain.
 9. Verify invalid Outbox JSON/destination becomes terminal immediately, while a
    temporary Workflow API failure uses lease-based jittered backoff and stops at
    the frozen maximum delivery-attempt count.
+10. Verify an Offer deadline submitted as a summer and winter
+    `America/New_York` wall-clock time is normalized with the correct seasonal
+    offset. Verify the spring DST gap is rejected and the repeated fall-back
+    hour requires an explicit `-04:00` or `-05:00` offset. Confirm inspection
+    CSVs retain UTC values and append matching `_eastern` columns.
 
 ## 7. Inspection and release evidence
 

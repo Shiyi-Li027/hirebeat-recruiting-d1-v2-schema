@@ -6,11 +6,50 @@ export interface OfferDeadlinePolicy {
 }
 
 const RFC3339_PATTERN=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/;
+const LOCAL_TIMESTAMP_PATTERN=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/;
 
-export function parseResponseDueAt(value:unknown):string|null{
+function validParts(parts:number[]):boolean{
+  const [year,month,day,hour,minute,second,millisecond]=parts;
+  if(month<1||month>12||hour>23||minute>59||second>59)return false;
+  const date=new Date(0);date.setUTCFullYear(year,month-1,day);date.setUTCHours(hour,minute,second,millisecond);
+  return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+}
+
+function zonedParts(instant:Date,timeZone:string):number[]{
+  let values:Record<string,string>;
+  try{
+    values=Object.fromEntries(new Intl.DateTimeFormat("en-US",{
+      timeZone,calendar:"gregory",numberingSystem:"latn",hourCycle:"h23",
+      year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",
+    }).formatToParts(instant).filter((part)=>part.type!=="literal").map((part)=>[part.type,part.value]));
+  }catch{throw new Error("response_due_at_timezone_invalid");}
+  return["year","month","day","hour","minute","second"].map((key)=>Number(values[key]));
+}
+
+export function localTimestampInTimeZone(value:string,timeZone:string):string{
+  const match=value.trim().match(LOCAL_TIMESTAMP_PATTERN);
+  if(!match)throw new Error("response_due_at_invalid_local_datetime");
+  const parts=[Number(match[1]),Number(match[2]),Number(match[3]),Number(match[4]),Number(match[5]),Number(match[6]),Number((match[7]??"").padEnd(3,"0"))];
+  if(!validParts(parts))throw new Error("response_due_at_invalid_local_datetime");
+  const wallClock=new Date(0);wallClock.setUTCFullYear(parts[0],parts[1]-1,parts[2]);wallClock.setUTCHours(parts[3],parts[4],parts[5],parts[6]);
+  const wallClockUtc=wallClock.getTime();
+  const candidates:string[]=[];
+  for(let offsetMinutes=-14*60;offsetMinutes<=14*60;offsetMinutes+=15){
+    const candidate=new Date(wallClockUtc-offsetMinutes*60_000);
+    const displayed=zonedParts(candidate,timeZone);
+    if(displayed.every((part,index)=>part===parts[index]))candidates.push(candidate.toISOString());
+  }
+  const unique=[...new Set(candidates)];
+  if(unique.length===0)throw new Error("response_due_at_nonexistent_local_time");
+  if(unique.length>1)throw new Error("response_due_at_ambiguous_local_time");
+  return unique[0];
+}
+
+export function parseResponseDueAt(value:unknown,timeZone?:string|null):string|null{
   if(value===undefined||value===null||value==="")return null;
   if(typeof value!=="string")throw new Error("response_due_at_invalid_rfc3339");
   const input=value.trim();const match=input.match(RFC3339_PATTERN);
+  if(!match&&timeZone)return localTimestampInTimeZone(input,timeZone);
   if(!match)throw new Error("response_due_at_invalid_rfc3339");
   const [,yearText,monthText,dayText,hourText,minuteText,secondText,fraction="",zone]=match;
   const year=Number(yearText);const month=Number(monthText);const day=Number(dayText);
@@ -30,8 +69,8 @@ export function parseResponseDueAt(value:unknown):string|null{
   return instant.toISOString();
 }
 
-export function requireFutureResponseDueAt(value:unknown,boundary:Date):string|null{
-  const dueAt=parseResponseDueAt(value);
+export function requireFutureResponseDueAt(value:unknown,boundary:Date,timeZone?:string|null):string|null{
+  const dueAt=parseResponseDueAt(value,timeZone);
   if(dueAt!==null&&Date.parse(dueAt)<=boundary.getTime())throw new Error("response_due_at_must_be_future");
   return dueAt;
 }

@@ -15,6 +15,14 @@ import pathlib
 import subprocess
 from typing import Any
 
+from time_policy import (
+    BUSINESS_TIMEZONE,
+    BUSINESS_ZONE,
+    STORAGE_TIMEZONE,
+    add_human_time_columns,
+    eastern_display,
+)
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -86,14 +94,42 @@ def main() -> None:
             "ml_recommendation_result.csv": f"SELECT * FROM ml_recommendation_result WHERE application_id={app};",
             "offer.csv": f"SELECT * FROM offer WHERE application_id={app};",
         })
-    date = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    policy_rows = execute(
+        """SELECT c.configuration_key, c.configuration_value_json
+           FROM system_configuration AS c
+           JOIN system_configuration_release AS r
+             ON r.id=c.configuration_release_id
+          WHERE r.release_status='active'
+            AND c.configuration_scope='localization'
+          ORDER BY c.configuration_key;""",
+        remote,
+    )
+    policy = {
+        row["configuration_key"]: json.loads(row["configuration_value_json"])
+        for row in policy_rows
+    }
+    if policy != {
+        "business_timezone": BUSINESS_TIMEZONE,
+        "storage_timezone": STORAGE_TIMEZONE,
+    }:
+        raise SystemExit(f"Active D1 time policy is missing or unsupported: {policy}")
+    generated_at_utc = dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    date = dt.datetime.now(BUSINESS_ZONE).date().isoformat()
     output = ROOT / "test-exports" / args.environment / date / args.workflow_run_uuid
     output.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
     for filename, sql in queries.items():
-        rows = execute(sql, remote)
+        rows = add_human_time_columns(execute(sql, remote))
         count, digest = write_csv(output / filename, rows)
-        manifest.append({"file_name": filename, "row_count": count, "sha256": digest})
+        manifest.append({
+            "file_name": filename,
+            "row_count": count,
+            "sha256": digest,
+            "storage_timezone": STORAGE_TIMEZONE,
+            "human_display_timezone": BUSINESS_TIMEZONE,
+            "generated_at_utc": generated_at_utc,
+            "generated_at_eastern": eastern_display(generated_at_utc),
+        })
     write_csv(output / "00_export_manifest.csv", manifest)
     print(output)
 

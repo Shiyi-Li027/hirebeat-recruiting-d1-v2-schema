@@ -1,6 +1,6 @@
 # HireBeat 新版 D1 数据库全局 Schema 规范（Confirmed Revision 1）
 
-版本日期：2026-08-13  
+版本日期：2026-08-19
 适用范围：新版 Cloudflare D1 数据库、实时单条申请 ETL、批量回填、Airtable/Google Form 接入、ML 招聘决策与 Offer 生命周期。
 
 ## 1. 三方基准
@@ -71,6 +71,9 @@ id INTEGER PRIMARY KEY,
 ### 新版决定
 
 - 所有系统时间统一保存 UTC ISO 8601 文本，例如 `2026-08-13T19:20:31Z`。
+- 业务展示时区统一为 IANA `America/New_York`。招聘人员输入的本地日期时间必须同时携带该 IANA 时区，或直接提供含 `-04:00` / `-05:00` 偏移量的 RFC 3339 时间；API 规范化为 UTC 后再写入 D1。
+- 页面、人工验收报告和导出可增加美东展示列，但必须保留原始 UTC 值。原始 D1 查询、Workflow、Queue、租约、重试、截止期限和审计比较永远使用 UTC。
+- 夏令时春季不存在的本地时刻必须拒绝；秋季重复时刻必须要求明确偏移量。纯日期字段（例如 `employment_start_date`）不进行时区转换。
 - 核心可变记录包含：
 
 ```sql

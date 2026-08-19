@@ -26,7 +26,7 @@ Current verified baseline:
 | Local foreign-key violations | 0 |
 | Local migration | Passed |
 
-The immutable initial migration creates the original schema objects only. Migrations `0002` through `0013` add R2 file-integrity support, versioned non-secret runtime configuration, reference and hiring-stage seeds, the global ML threshold policy, minimum runtime reference rows, command idempotency, single-promotion protection from normalized Submission to Application, the Active-Position JD invariant, versioned Offer response-deadline policy, a recovery fence for audited Intake replay after technical exhaustion, and ordered Catalog snapshot republication. Deployed migrations are immutable; every later schema or seed change must use a new numbered migration.
+The immutable initial migration creates the original schema objects only. Migrations `0002` through `0014` add R2 file-integrity support, versioned non-secret runtime configuration, reference and hiring-stage seeds, the global ML threshold policy, minimum runtime reference rows, command idempotency, single-promotion protection from normalized Submission to Application, the Active-Position JD invariant, versioned Offer response-deadline policy, a recovery fence for audited Intake replay after technical exhaustion, ordered Catalog snapshot republication, and the UTC-storage / `America/New_York` human-display policy. Deployed migrations are immutable; every later schema or seed change must use a new numbered migration.
 
 ## Architecture / 架构
 
@@ -231,7 +231,7 @@ PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/te
 Expected result:
 
 ```text
-Schema validation succeeded: 13 migrations, 84 tables, 120 explicit indexes, 56 status policies, 4 reviewed cross-column triggers, 0 FK violations.
+Schema validation succeeded: 14 migrations, 84 tables, 120 explicit indexes, 56 status policies, 4 reviewed cross-column triggers, 0 FK violations.
 ```
 
 ## Configure Cloudflare D1 / 配置数据库

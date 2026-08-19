@@ -1,5 +1,6 @@
 import { commandKey, sha256 } from "./helpers";
 import { requireFutureResponseDueAt } from "./offer-deadline";
+import { loadSystemTimePolicy } from "./time-policy";
 
 export function canonical(value:unknown):string{
   if(value===null||typeof value!=="object")return JSON.stringify(value);
@@ -39,6 +40,9 @@ export async function createOfferVersion(
   if((compensationAmount===null)!==(currency===null)||(compensationAmount===null)!==(period===null))throw new Error("compensation_fields_must_be_all_null_or_all_present");
 
   const nowDate=new Date();
+  const timePolicy=await loadSystemTimePolicy(db);
+  const inputTimeZone=nullableText(body.response_due_at_timezone);
+  if(inputTimeZone&&inputTimeZone!==timePolicy.businessTimeZone)throw new Error("response_due_at_timezone_not_supported");
   const terms={
     offer_title:title,employment_type_id:body.employment_type_id??null,
     work_location:nullableText(body.work_location),work_mode:nullableText(body.work_mode),
@@ -47,7 +51,7 @@ export async function createOfferVersion(
     compensation_currency_code:currency,compensation_period:period,
     signing_bonus_minor_units:nullableNonnegativeInteger(body.signing_bonus_minor_units,"signing_bonus_minor_units"),
     target_bonus_description:nullableText(body.target_bonus_description),equity_description:nullableText(body.equity_description),
-    response_due_at:requireFutureResponseDueAt(body.response_due_at,nowDate),additional_terms:body.additional_terms??null,
+    response_due_at:requireFutureResponseDueAt(body.response_due_at,nowDate,inputTimeZone),additional_terms:body.additional_terms??null,
   };
   const termsJson=canonical(terms);const termsHash=await sha256(termsJson);
   const duplicate=await db.prepare(`SELECT id,version_no FROM offer_version WHERE offer_id=?1 AND terms_sha256=?2`)
@@ -57,7 +61,9 @@ export async function createOfferVersion(
   const next=await db.prepare(`SELECT COALESCE(MAX(version_no),0)+1 version_no FROM offer_version WHERE offer_id=?1`)
     .bind(offerId).first<{version_no:number}>();
   const versionNo=next?.version_no??1;const versionUuid=crypto.randomUUID();const now=nowDate.toISOString();
-  const metadata={offer_id:offerId,offer_version_uuid:versionUuid,version_no:versionNo,terms_sha256:termsHash};
+  const metadata={offer_id:offerId,offer_version_uuid:versionUuid,version_no:versionNo,terms_sha256:termsHash,
+    response_due_at:terms.response_due_at,response_due_at_input_timezone:inputTimeZone,
+    storage_timezone:timePolicy.storageTimeZone,business_timezone:timePolicy.businessTimeZone};
   const results=await db.batch([
     db.prepare(`INSERT INTO offer_version (
       offer_version_uuid,offer_id,version_no,terms_sha256,offer_title,employment_type_id,work_location,work_mode,

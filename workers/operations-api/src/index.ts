@@ -7,6 +7,7 @@ import { createOfferVersion } from "./offer-version";
 import { createReference, referenceTypes, setReferenceActive } from "./reference-importer";
 import { catalogChildTypes, createCatalogChild, setCatalogChildActive } from "./catalog-child-importer";
 import { requestIntakeRecovery } from "./intake-recovery";
+import { loadSystemTimePolicy, publicTimePolicy } from "./time-policy";
 
 interface Env { DB:D1Database;DEPLOYMENT_STAGE:string;ACCESS_TEAM_DOMAIN:string;ACCESS_AUD:string; }
 
@@ -21,6 +22,7 @@ export default {
     try{
       const auth=await authenticateAccess(request,env.ACCESS_TEAM_DOMAIN,env.ACCESS_AUD);
       if(request.method==="GET"&&url.pathname==="/v1/reference/types")return response({reference_types:referenceTypes()});
+      if(request.method==="GET"&&url.pathname==="/v1/system/time-policy")return response(publicTimePolicy(await loadSystemTimePolicy(env.DB)));
       const referenceCreate=url.pathname.match(/^\/v1\/reference\/([a-z0-9_]+)$/);
       if(request.method==="POST"&&referenceCreate)return response(await createReference(env.DB,referenceCreate[1],await jsonBody(request),auth.actor),201);
       const referenceState=url.pathname.match(/^\/v1\/reference\/([a-z0-9_]+)\/(\d+)\/active-state$/);

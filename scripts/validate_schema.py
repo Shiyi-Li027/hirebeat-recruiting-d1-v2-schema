@@ -34,6 +34,8 @@ ALLOWED_STATUS_STRATEGIES = {
     "nullable_transition_origin",
 }
 EXPECTED_SYSTEM_CONFIGURATION = {
+    ("localization", "business_timezone"): '"America/New_York"',
+    ("localization", "storage_timezone"): '"UTC"',
     ("ml_inference", "request_timeout_ms"): "30000",
     ("offer", "default_response_window_days"): "7",
     ("outbox", "max_delivery_attempts"): "8",
@@ -238,7 +240,7 @@ def validate(check_config: bool) -> None:
         )
     if violations:
         raise SystemExit(f"Schema validation failed: FK violations {violations[:20]}")
-    if active_releases != [("hirebeat-system-configuration-v2", 2)]:
+    if active_releases != [("hirebeat-system-configuration-v3", 3)]:
         raise SystemExit(
             "Schema validation failed: expected exactly one active current "
             f"configuration release, found {active_releases}."

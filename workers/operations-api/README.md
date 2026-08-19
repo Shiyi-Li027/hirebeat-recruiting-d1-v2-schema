@@ -1,5 +1,16 @@
 # HireBeat Operations API
 
+## Time policy
+
+`GET /v1/system/time-policy` returns the active versioned storage and business
+time-zone policy. Persisted instants and machine comparisons remain RFC 3339
+UTC. Human-facing clients use `America/New_York`.
+
+Offer deadlines accept either a timezone-aware RFC 3339 value such as
+`2026-08-27T17:00:00-04:00`, or a wall-clock value paired with
+`"response_due_at_timezone": "America/New_York"`. Spring DST-gap timestamps
+are rejected. Repeated fall-back timestamps require an explicit offset.
+
 This private Cloudflare Worker is the reviewed authoring boundary for Reference,
 Recruitment Catalog, hiring, and Offer commands. Every endpoint except
 `GET /health` requires a valid Cloudflare Access JWT.
