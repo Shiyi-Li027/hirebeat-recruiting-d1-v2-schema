@@ -333,16 +333,29 @@ production 使用后续独立创建的 D1、R2、Worker、Workflow 和 Secrets�
 
 ## 部署前必须提供/完成，但不属于业务选择
 
-以下不会阻止代码骨架、测试和 migrations 编写，但会阻止真实端到端部署：
+Staging 端到端验收已经完成，包括 Google Form provider-native 实时申请提交路径。
+对应证据记录在 `17_staging_end_to_end_acceptance_plan.md` 和 staging closeout report 中。
 
-1. 轮换附件中已经暴露过的 Airtable PAT；旧 token 不得继续使用。
-2. 决定是否轮换已作为附件共享过的 Google service account key；生产推荐轮换。
-3. 为 Adapter 提供新的 Secret，以及 Airtable base/table、Google spreadsheet/range。
-4. 若选择 Push-first，建立 Airtable Automation 和 Google Apps Script trigger。
-5. 配置 Parser/ML service URL 与 auth token。
-6. 将当前远程 D1/R2 固定为 staging，配置 staging GitHub Environment secrets；在端到端
-   验证完成后另建 production D1/R2 和 production GitHub Environment approval。
-7. 通过新版 importer 提供首批 Reference/Catalog 数据；不会读取旧 D1。
+Airtable provider-native 申请窗口当前明确暂缓，不阻塞已通过验收的 Google Form
+staging 通道，也不阻塞 production 基础设施准备。
+
+Production 部署前仍必须完成：
+
+1. 创建独立的 production D1、R2、Queues/DLQ、Workers、Workflows，以及私有
+   Resume Parser 和 ML 服务；不得重新绑定或复用 staging 资源。
+2. 配置 production 专用 custom domains、Cloudflare Access 应用与策略、
+   环境变量和 Secrets。
+3. 创建受保护的 GitHub `production` Environment，并启用人工 approval；
+   production migration 和部署必须经过该 Environment。
+4. 为 production Google Form bridge 配置 production 专用的 provider 标识和
+   凭据；不得复用 staging token、service token 或其他 Secrets。
+5. 在启用 production provider-native 申请窗口前，实现持久化
+   `catalog_sync_run` / `catalog_sync_target_run` 结果报告。
+6. 配置 production Parser/ML service URL、服务间认证和最小权限调用身份。
+7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
+   不从旧 D1 或 staging D1 复制未经审核的运行数据。
+8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
+   凭据使用；production 应创建或轮换为独立凭据。
 
 ## 最终冻结结果
 

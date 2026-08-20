@@ -196,21 +196,37 @@ lineage remains understandable.
 - Store all D1 timestamps in UTC. Apps Script uses `America/New_York` only as
   the business/display timezone.
 
-## 6. Remaining activation work
+## 6. Current activation status and remaining work
 
-Repository bridge code is now available, but provider-native staging is not yet
-truthfully active. Activation still requires:
+The Google Form staging provider-native path is enabled and accepted. Its
+end-to-end evidence is recorded in `17_staging_end_to_end_acceptance_plan.md`
+and the staging closeout report:
 
-1. the actual staging Google Form edit link or Form ID;
-2. the actual staging Airtable Base ID, submission Table ID, Position mirror
-   Table ID and field review;
-3. a dedicated Cloudflare Access service token and Service Auth policy;
-4. secrets entered into Apps Script/Airtable through their protected settings;
-5. one synthetic submission from each real provider and D1 evidence;
-6. wiring `catalog_sync_run` / `catalog_sync_target_run` command reporting before
-   production enablement, so each target has durable retry and completion
-   evidence.
+- Intake run `29` succeeded.
+- Application `10` was created with complete source lineage.
+- Workflow B run `37` succeeded.
+- ML analysis and recommendation records were created.
+- Offer `5` was created in `draft` status.
+- New Google Form responses are delivered to staging Intake in real time.
 
-The last item is intentionally not faked by the templates: a provider window
-must not claim a successful D1 sync target until the external option mutation
-actually completed.
+The Airtable submission and Catalog synchronization windows are intentionally
+deferred. They are not required for the currently accepted Google Form staging
+channel.
+
+Before enabling a production provider-native submission window:
+
+1. Create production-specific Google Form and bound Apps Script configuration,
+   or approve an equivalent isolated production provider configuration.
+2. Configure production-only Ingress and Operations endpoints, provider
+   identifiers, Cloudflare Access service credentials, and application Secrets.
+3. Do not reuse staging service tokens, authentication tokens, Form identifiers,
+   runtime bindings, or other Secrets.
+4. Implement durable `catalog_sync_run` and `catalog_sync_target_run` result
+   reporting.
+5. After protected production deployment approval, submit one synthetic
+   production smoke-test application and verify Intake, Workflow A,
+   Application lineage, Workflow B, ML, and Offer evidence before opening the
+   production channel.
+
+Production provider activation must remain blocked until these requirements
+are complete.
