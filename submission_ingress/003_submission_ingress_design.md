@@ -1,7 +1,7 @@
 # Group G03：Submission Ingress 与 Raw Submission（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`003_submission_ingress_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G03）
 状态：`confirmed`
 
 ## 1. 本组边界

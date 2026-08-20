@@ -1,7 +1,7 @@
 # Group G04：System Configuration、Workflow、Step、Attempt、Outbox 与 Audit（Confirmed Revision 2）
 
-版本日期：2026-08-17  
-对应 SQL：`004_workflow_control_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G04）
 状态：`confirmed`
 
 面向初学者的完整启动流程和逐字段字典见：`004_workflow_control_beginner_guide.md`。

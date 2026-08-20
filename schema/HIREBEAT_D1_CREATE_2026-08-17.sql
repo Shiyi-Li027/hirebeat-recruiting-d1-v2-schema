@@ -8,7 +8,7 @@
 PRAGMA defer_foreign_keys = on;
 
 -- ============================================================
--- BEGIN SOURCE MODULE: shared_reference/001_shared_reference_schema.sql
+-- BEGIN GROUP G01
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G01: shared reference data and talent taxonomies
@@ -281,10 +281,10 @@ CREATE INDEX idx_location_country_state_city
 
 CREATE INDEX idx_major_field_study
   ON major (field_study_id);
--- END SOURCE MODULE: shared_reference/001_shared_reference_schema.sql
+-- END GROUP G01
 
 -- ============================================================
--- BEGIN SOURCE MODULE: catalog/002_recruitment_catalog_draft.sql
+-- BEGIN GROUP G02
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G02: authoritative recruitment catalog and form synchronization
@@ -580,10 +580,10 @@ CREATE INDEX idx_catalog_sync_run_revision_status
 
 CREATE INDEX idx_catalog_sync_target_pending
   ON catalog_sync_target_run (target_status, next_attempt_at);
--- END SOURCE MODULE: catalog/002_recruitment_catalog_draft.sql
+-- END GROUP G02
 
 -- ============================================================
--- BEGIN SOURCE MODULE: submission_ingress/003_submission_ingress_draft.sql
+-- BEGIN GROUP G03
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G03: submission ingress and faithful raw submission
@@ -801,10 +801,10 @@ CREATE INDEX idx_raw_submission_retention
 CREATE UNIQUE INDEX uq_raw_submission_resume_r2_object_key
   ON raw_submission_resume (resume_r2_object_key)
   WHERE resume_r2_object_key IS NOT NULL;
--- END SOURCE MODULE: submission_ingress/003_submission_ingress_draft.sql
+-- END GROUP G03
 
 -- ============================================================
--- BEGIN SOURCE MODULE: workflow_control/004_workflow_control_draft.sql
+-- BEGIN GROUP G04
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G04: versioned system configuration, workflow control, retry
@@ -1132,10 +1132,10 @@ CREATE INDEX idx_audit_correlation
 CREATE UNIQUE INDEX uq_audit_event_command_idempotency
   ON audit_event (event_type, correlation_key)
   WHERE event_type LIKE 'command.%' AND correlation_key IS NOT NULL;
--- END SOURCE MODULE: workflow_control/004_workflow_control_draft.sql
+-- END GROUP G04
 
 -- ============================================================
--- BEGIN SOURCE MODULE: submission_processing/005_submission_processing_draft.sql
+-- BEGIN GROUP G05
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G05: normalization and versioned Resume extraction results
@@ -1587,10 +1587,10 @@ CREATE INDEX idx_identity_feature_dedup_lookup
     normalized_value_hmac,
     submission_normalized_id
   );
--- END SOURCE MODULE: submission_processing/005_submission_processing_draft.sql
+-- END GROUP G05
 
 -- ============================================================
--- BEGIN SOURCE MODULE: dedup_admission/006_dedup_admission_draft.sql
+-- BEGIN GROUP G06
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G06: real-time deduplication and Application admission decision
@@ -1916,10 +1916,10 @@ CREATE INDEX idx_match_evidence_target_feature
 
 CREATE INDEX idx_match_evidence_matched_feature
   ON submission_match_evidence (matched_identity_feature_id);
--- END SOURCE MODULE: dedup_admission/006_dedup_admission_draft.sql
+-- END GROUP G06
 
 -- ============================================================
--- BEGIN SOURCE MODULE: application_core/007_application_core_draft.sql
+-- BEGIN GROUP G07
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G07: Person, Application, Candidate snapshot, identity history, lineage
@@ -2363,10 +2363,10 @@ CREATE INDEX idx_person_contact_hmac_lookup
 
 CREATE INDEX idx_person_link_hmac_lookup
   ON person_link (link_type, normalized_url_hmac, person_id);
--- END SOURCE MODULE: application_core/007_application_core_draft.sql
+-- END GROUP G07
 
 -- ============================================================
--- BEGIN SOURCE MODULE: candidate_profile/008_candidate_profile_draft.sql
+-- BEGIN GROUP G08
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G08: published Person/Candidate education, employment, skill,
@@ -2693,10 +2693,10 @@ CREATE INDEX idx_person_certification_person_status
 
 CREATE INDEX idx_candidate_certification_candidate
   ON candidate_certification (candidate_snapshot_id, person_certification_id);
--- END SOURCE MODULE: candidate_profile/008_candidate_profile_draft.sql
+-- END GROUP G08
 
 -- ============================================================
--- BEGIN SOURCE MODULE: machine_learning/009_machine_learning_draft.sql
+-- BEGIN GROUP G09
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G09: single-model anomaly, similarity, threshold, and recommendation
@@ -2993,10 +2993,10 @@ CREATE INDEX idx_ml_similarity_position_score
 
 CREATE INDEX idx_ml_recommendation_decision_time
   ON ml_recommendation_result (recommendation_decision, decided_at);
--- END SOURCE MODULE: machine_learning/009_machine_learning_draft.sql
+-- END GROUP G09
 
 -- ============================================================
--- BEGIN SOURCE MODULE: hiring_pipeline/010_hiring_pipeline_draft.sql
+-- BEGIN GROUP G10
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G10: hiring pipeline templates and per-Application stage execution
@@ -3355,10 +3355,10 @@ CREATE INDEX idx_stage_transition_event_application_time
 
 CREATE INDEX idx_stage_transition_event_workflow
   ON application_stage_transition_event (workflow_run_id);
--- END SOURCE MODULE: hiring_pipeline/010_hiring_pipeline_draft.sql
+-- END GROUP G10
 
 -- ============================================================
--- BEGIN SOURCE MODULE: offer/011_offer_lifecycle_draft.sql
+-- BEGIN GROUP G11
 -- ============================================================
 -- HireBeat D1 new schema
 -- Group G11: Offer master, immutable terms versions, and lifecycle history
@@ -3624,7 +3624,7 @@ CREATE INDEX idx_offer_history_offer_occurred
 
 CREATE INDEX idx_offer_history_workflow
   ON offer_status_history (workflow_run_id);
--- END SOURCE MODULE: offer/011_offer_lifecycle_draft.sql
+-- END GROUP G11
 
 PRAGMA defer_foreign_keys = off;
 PRAGMA optimize;

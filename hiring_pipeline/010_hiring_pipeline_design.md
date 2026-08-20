@@ -1,7 +1,7 @@
 # Group G10：Hiring Pipeline 与实际招聘阶段运行（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`010_hiring_pipeline_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G10）
 状态：`confirmed`
 
 ## 1. 五张表的职责

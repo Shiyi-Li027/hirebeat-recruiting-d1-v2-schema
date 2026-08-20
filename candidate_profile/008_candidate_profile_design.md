@@ -1,7 +1,7 @@
 # Group G08：Candidate/Person 人才档案（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`008_candidate_profile_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G08）
 状态：`confirmed`
 
 ## 1. 本组边界
