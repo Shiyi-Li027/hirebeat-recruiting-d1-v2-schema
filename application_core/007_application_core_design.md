@@ -1,7 +1,7 @@
 # Group G07：Person、Application 与 Candidate Core（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`007_application_core_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G07）
 状态：`confirmed`
 
 ## 1. 三个核心实体不是同一件事

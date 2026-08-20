@@ -134,9 +134,16 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 
 ## Repository structure / 仓库结构
 
+The tree below highlights the maintained entry points and is representative rather than exhaustive.
+
+下列结构展示当前维护的主要入口；它是代表性结构，不是所有文件的完整清单。
+
 ```text
 .
-├── .github/workflows/deploy-d1.yml
+├── .github/workflows/
+│   ├── deploy-d1.yml
+│   ├── export-workflow-inspection.yml
+│   └── validate-production-code.yml
 ├── migrations/
 │   ├── 0001_initial_schema.sql
 │   ├── 0002_add_resume_file_integrity.sql
@@ -147,16 +154,11 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 │   ├── 0007_seed_minimum_runtime_reference_data.sql
 │   ├── 0008_enforce_command_idempotency.sql
 │   ├── 0009_enforce_single_application_promotion.sql
-│   └── 0010_require_jd_for_active_position.sql
-├── workers/
-│   ├── submission-ingress/
-│   ├── etl-orchestrator/
-│   └── operations-api/
-├── services/
-│   ├── resume-parser/
-│   └── ml-inference/
-├── test-exports/
-│   └── read-only inspection export contract
+│   ├── 0010_require_jd_for_active_position.sql
+│   ├── 0011_add_offer_response_deadline_policy.sql
+│   ├── 0012_add_controlled_intake_recovery.sql
+│   ├── 0013_allow_catalog_snapshot_republication.sql
+│   └── 0014_add_business_timezone_policy.sql
 ├── schema/
 │   ├── HIREBEAT_D1_CREATE_2026-08-17.sql
 │   ├── HIREBEAT_D1_DELETE_ALL_2026-08-17.sql
@@ -164,32 +166,48 @@ explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 │   ├── HIREBEAT_D1_CONSTRAINT_DEFAULT_MATRIX.md
 │   ├── HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql
 │   └── status_field_policy.csv
+├── workers/
+│   ├── submission-ingress/
+│   ├── etl-orchestrator/
+│   ├── operations-api/
+│   └── shared/
+├── services/
+│   ├── resume-parser/
+│   └── ml-inference/
+├── provider-integrations/
+│   ├── google-form/
+│   ├── airtable/
+│   └── test/
 ├── scripts/
 │   ├── build_schema_artifacts.py
+│   ├── export_workflow_inspection.py
 │   ├── generate_constraint_matrix.py
+│   ├── generate_staging_closeout_report.py
 │   └── validate_schema.py
 ├── shared_reference/ through offer/
-│   └── confirmed group design and source SQL
+│   └── logical group design documentation
+├── test-exports/
+│   └── read-only inspection contract and ignored local evidence
+├── 00_master_table_groups.md
 ├── 15_production_implementation_runbook.md
 ├── 16_runtime_three_way_comparison.md
 ├── 17_staging_end_to_end_acceptance_plan.md
 ├── 18_automatic_recovery_policy.md
+├── 19_data_change_reaction_policy.md
+├── 20_provider_native_submission_windows.md
 ├── wrangler.toml
 ├── package.json
 ├── DEPLOYMENT_GUIDE.md
 └── README.md
 ```
 
-The canonical database deployment entry point is the ordered set of files in `migrations/`. The canonical runtime entry points are the three packages below `workers/`; the former root JavaScript Ingress prototype and its standalone Wrangler config were removed to prevent accidental deployment. The standalone CREATE file represents the latest complete schema for a fresh database and is therefore no longer byte-identical to `0001`. The DELETE file is a separate manual emergency/testing utility and is intentionally excluded from `migrations/`.
+The ordered files in `migrations/` are the canonical deployment history and remain immutable after application. `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` is the single canonical complete schema for creating a fresh database. Its G01 through G11 comment boundaries preserve the logical grouping without requiring executable per-group SQL files. The corresponding group directories contain design documentation only.
 
-The generated constraint/default matrix covers every column in all 84 current
-tables. `status_field_policy.csv` is the reviewed source of truth for every
-`status`, `*_status`, and `is_active` field. Validation fails if a new status field has no
-policy, a policy becomes stale, a protected default/nullability changes, or an
-unreviewed SQL Trigger appears. Manual SQL is an administrative exception and
-must begin from `HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql`; production writes
-should continue to use the protected importers so callers receive friendly
-field-specific validation errors.
+`scripts/build_schema_artifacts.py` validates the canonical complete CREATE file and builds derived administrative artifacts. It does not assemble the database schema from separate group fragments. `migrations/0001_initial_schema.sql` remains an immutable historical baseline and is therefore not rewritten to match later schema revisions or updated comment formatting.
+
+The canonical runtime entry points are the packages below `workers/`; `workers/shared/` contains shared runtime code. `provider-integrations/` contains the provider bridge templates and their tests. The standalone DELETE file is a manual emergency/testing utility and is intentionally excluded from `migrations/`.
+
+The generated constraint/default matrix covers every column in all 84 current tables. `status_field_policy.csv` is the reviewed source of truth for every `status`, `*_status`, and `is_active` field. Validation fails if a new status field has no policy, a policy becomes stale, a protected default/nullability changes, or an unreviewed SQL Trigger appears. Manual SQL is an administrative exception and must begin from `HIREBEAT_D1_MANUAL_INSERT_TEMPLATES.sql`; production writes should continue to use the protected importers so callers receive friendly field-specific validation errors.
 
 ## Prerequisites / 环境要求
 

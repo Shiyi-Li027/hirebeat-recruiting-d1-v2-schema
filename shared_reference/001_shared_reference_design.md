@@ -1,8 +1,8 @@
 # Group G01：共享参考数据与人才分类字典（Confirmed 1）
 
-确认日期：2026-08-13  
-状态：`confirmed`  
-对应 SQL：`001_shared_reference_schema.sql`
+确认日期：2026-08-13
+状态：`confirmed`
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G01）
 
 ## 1. 本组结论
 

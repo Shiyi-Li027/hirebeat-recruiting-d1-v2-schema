@@ -1,6 +1,6 @@
 # Catalog 001：`company` 表设计与三方比较（Draft 1）
 
-> 状态说明：本文件是早期 Company 单表审查记录。当前完整字段和约束已经合并进 `002_recruitment_catalog_draft.sql` 与 `002_recruitment_catalog_design.md`；组装最终 Schema 时不要重复执行 `001_company_draft.sql`。
+> 状态说明：本文件是早期 Company 单表审查记录。当前完整字段和约束已经合并进 Canonical Schema 的 Group G02 与 `002_recruitment_catalog_design.md`；本文件仅保留为设计历史记录，不是可执行 Schema 入口。
 
 ## 1. 表的职责
 

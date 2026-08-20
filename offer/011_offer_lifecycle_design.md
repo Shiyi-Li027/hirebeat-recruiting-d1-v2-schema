@@ -1,7 +1,7 @@
 # Group G11：Offer 生命周期（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`011_offer_lifecycle_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G11）
 状态：`confirmed`
 
 ## 1. 首版三张表

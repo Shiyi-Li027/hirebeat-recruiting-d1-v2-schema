@@ -1,7 +1,7 @@
 # G04 Workflow Control 新手完整指南（Confirmed Revision 2）
 
-版本日期：2026-08-17  
-对应 Schema：`004_workflow_control_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G04）
 读者：第一次接触数据工程、异步任务、Workflow、Outbox 的开发者
 
 ## 1. 先用一个生活例子理解七张表

@@ -1,7 +1,7 @@
 # Group G02：招聘 Catalog 与表单目录同步（Confirmed Revision 2）
 
-版本日期：2026-08-17  
-对应 SQL：`002_recruitment_catalog_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G02）
 状态：`confirmed`
 
 ## 1. 本组边界

@@ -205,7 +205,7 @@ submission_identity_feature
 
 ```text
 submission_processing/005_submission_processing_design.md
-submission_processing/005_submission_processing_draft.sql
+schema/HIREBEAT_D1_CREATE_2026-08-17.sql (Group G05)
 ```
 
 ### 被替代或合并
@@ -237,7 +237,7 @@ submission_match_evidence
 
 ```text
 dedup_admission/006_dedup_admission_design.md
-dedup_admission/006_dedup_admission_draft.sql
+schema/HIREBEAT_D1_CREATE_2026-08-17.sql (Group G06)
 ```
 
 ### 已确认不创建
@@ -279,7 +279,7 @@ candidate_snapshot
 对应文件：
 
 - `application_core/007_application_core_design.md`
-- `application_core/007_application_core_draft.sql`
+- Canonical SQL：`schema/HIREBEAT_D1_CREATE_2026-08-17.sql`（Group G07）
 
 主要变化：
 
@@ -314,7 +314,7 @@ candidate_certification
 对应文件：
 
 - `candidate_profile/008_candidate_profile_design.md`
-- `candidate_profile/008_candidate_profile_draft.sql`
+- Canonical SQL：`schema/HIREBEAT_D1_CREATE_2026-08-17.sql`（Group G08）
 
 ### 已确认不创建
 
@@ -346,7 +346,7 @@ ml_recommendation_result
 对应文件：
 
 - `machine_learning/009_machine_learning_design.md`
-- `machine_learning/009_machine_learning_draft.sql`
+- Canonical SQL：`schema/HIREBEAT_D1_CREATE_2026-08-17.sql`（Group G09）
 
 主要变化：
 
@@ -375,7 +375,7 @@ application_stage_transition_event
 对应文件：
 
 - `hiring_pipeline/010_hiring_pipeline_design.md`
-- `hiring_pipeline/010_hiring_pipeline_draft.sql`
+- Canonical SQL：`schema/HIREBEAT_D1_CREATE_2026-08-17.sql`（Group G10）
 
 ### 被替代
 
@@ -416,7 +416,7 @@ position_work_mode
 对应文件：
 
 - `offer/011_offer_lifecycle_design.md`
-- `offer/011_offer_lifecycle_draft.sql`
+- Canonical SQL：`schema/HIREBEAT_D1_CREATE_2026-08-17.sql`（Group G11）
 
 主要变化：
 

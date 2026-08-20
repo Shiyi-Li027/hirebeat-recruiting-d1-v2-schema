@@ -1,7 +1,7 @@
 # Group G06：实时查重与 Application 准入（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`006_dedup_admission_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G06）
 状态：`confirmed（2026-08-17）`
 
 ## 1. 本组只做两件事

@@ -1,7 +1,7 @@
 # Group G09：实时 ML Anomaly、Similarity 与 Recommendation（Confirmed）
 
-版本日期：2026-08-17  
-对应 SQL：`009_machine_learning_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G09）
 状态：`confirmed，Revision 1`
 
 ## 1. 已确定的首版业务边界

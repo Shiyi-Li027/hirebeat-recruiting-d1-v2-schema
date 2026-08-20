@@ -1,7 +1,7 @@
 # Group G05：Submission 标准化与简历结构化提取（Confirmed Revision 1）
 
-版本日期：2026-08-17  
-对应 SQL：`005_submission_processing_draft.sql`  
+版本日期：2026-08-17
+对应 Canonical SQL：[`HIREBEAT_D1_CREATE_2026-08-17.sql`](../schema/HIREBEAT_D1_CREATE_2026-08-17.sql)（Group G05）
 状态：`confirmed（2026-08-17）`
 
 ## 1. 本组的业务边界
