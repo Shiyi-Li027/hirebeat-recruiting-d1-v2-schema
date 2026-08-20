@@ -206,23 +206,47 @@ python3 -m pip install -r services/resume-parser/requirements-dev.txt
 PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/test
 ```
 
-Then apply migrations in staging, deploy both Python services privately, configure Worker Secrets/variables, deploy the three Workers, and execute synthetic end-to-end cases. Production uses separate D1, R2, Workers, Workflows, service URLs and Secrets; staging resources must never be rebound as production.
+The staging migrations, runtime deployment, synthetic end-to-end acceptance, and Google Form provider-native submission path have completed successfully. The next deployment phase is production preparation. Production must use separate D1, R2, Queues/DLQ, Workers, Workflows, private Parser/ML services, service URLs, custom domains, Access configuration and Secrets. Staging resources must never be rebound or reused as production resources.
 
-## 7. Provider-native staging activation
+## 7. Provider-native channel status
 
-The credential-free provider bridge templates and historical Catalog revision
-read endpoint are implemented. Follow
-`20_provider_native_submission_windows.md`; do not paste provider credentials
-or object IDs into tracked source files. Google uses the Form-specific
-installable submit trigger, and Airtable uses a server-side Automation Run a
-script action.
+The Google Form provider-native staging channel is implemented and accepted.
+Its verified path covers Catalog option synchronization, native Form submission,
+authenticated Ingress delivery, Queue intake, Workflow A, normalized submission,
+deduplication, Application creation, Workflow B, ML recommendation and Offer
+draft creation. The accepted evidence is recorded in
+`17_staging_end_to_end_acceptance_plan.md` and the staging closeout report.
 
-## 8. Still externally blocked, not missing code
+The Airtable provider-native application window is deliberately deferred. Its
+templates may remain in the repository for future work, but Airtable activation
+is not part of the current production scope and does not block the accepted
+Google Form channel.
 
-- Exact Airtable base/table/field IDs and enabling the two reviewed Automations.
-- Exact Google Form ID, bound Apps Script installation and submit-trigger grant.
-- Private hosting URLs for Parser and ML containers.
-- Cloudflare Access application team domain, AUD, member group and Author policy.
-- Provider target credentials and final `catalog_sync_run` / `catalog_sync_target_run` result reporting.
+Continue to follow `20_provider_native_submission_windows.md`; never place
+provider credentials, Access service-token secrets, Form IDs or production
+resource identifiers directly in tracked source files.
 
-These values cannot be safely invented in source code. Their absence must block remote enablement, not weaken authentication or silently use defaults.
+## 8. Production deployment prerequisites
+
+The following items remain required before production enablement:
+
+- Create isolated production D1, R2, Queues/DLQ, Workers and Workflows.
+- Deploy private production Resume Parser and ML services and configure
+  production-only service URLs and authentication.
+- Configure company-owned production custom domains and separate Cloudflare
+  Access applications, AUD values and authorization policies.
+- Create a protected GitHub `production` Environment with manual approval and
+  production-only Cloudflare credentials.
+- Configure production-only Google Form provider identifiers, Ingress
+  credentials and Cloudflare Access service credentials; do not reuse staging
+  tokens or Secrets.
+- Implement durable `catalog_sync_run` / `catalog_sync_target_run` result
+  reporting before enabling the production provider-native submission window.
+- Import an explicitly reviewed production Reference/Catalog seed instead of
+  copying unreviewed staging runtime data.
+- Rotate or replace every credential that has appeared in an attachment,
+  screenshot, terminal transcript or chat record.
+
+These values and resources cannot be safely invented in source code. Their
+absence must block production enablement, not weaken authentication, reuse
+staging infrastructure or silently apply defaults.

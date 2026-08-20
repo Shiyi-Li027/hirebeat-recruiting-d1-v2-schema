@@ -391,10 +391,10 @@ explicitly redacted samples may be committed.
 
 ## Remaining deployment prerequisites and deferred work / 尚待外部配置与后续增强
 
-- Configure private Parser and ML service URLs, authentication Secrets, Cloudflare Access team domain/AUD, and source credentials before remote Worker deployment.
-- Configure the implemented Airtable Automation / Google Apps Script templates against the real staging Base/Form IDs and protected secrets.
-- Execute one provider-native synthetic submission per channel and add durable `catalog_sync_run` / `catalog_sync_target_run` reporting before production enablement.
-- Run staging end-to-end tests for empty database, first submission, technical redelivery, intentional resubmission, supersession fence, rejection, Offer creation/versioning, and terminal recovery before creating isolated production resources.
+- Staging end-to-end acceptance is complete, including the Google Form provider-native submission path. The accepted evidence is recorded in `17_staging_end_to_end_acceptance_plan.md` and the staging closeout report.
+- Airtable provider-native activation is deliberately deferred. It does not block the accepted Google Form staging channel or the current production-infrastructure preparation.
+- Before production deployment, create separate production D1, R2, Queues and DLQ, Workers, Workflows, private Parser and ML services, custom domains, Cloudflare Access policies, environment-specific Secrets, and a protected GitHub production Environment with approval.
+- Before enabling a production provider-native submission window, add durable `catalog_sync_run` / `catalog_sync_target_run` result reporting and configure production-only provider credentials and identifiers. Staging resources and Secrets must not be reused.
 - ML model/version expansion, chunked long-text embedding, Position-level work mode, reference-data releases, and external Offer document/e-signature integration remain deliberately deferred.
 
 See [`03_future_optimization_recommendations.md`](03_future_optimization_recommendations.md) for the maintained optimization backlog.
