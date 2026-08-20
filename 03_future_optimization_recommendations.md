@@ -251,3 +251,37 @@ Application、ML run 或表单 Catalog 发布使用的 revision 不允许原地�
 
 因此最终决策是：如果将来要求精确保留每个历史 JD 全文版本，可以再增加
 `position_revision`；首版暂时不需要增加，不改变现有设计。
+
+## 14. 独立 Company、Position、Mode 的任意顺序联动申请页（未来优化）
+
+当前 Google Form 首版继续使用已经通过 staging 端到端验收的单一组合选项：
+
+```text
+Company — Position — Work Mode [HB:r<revision>:p<position_id>:w<company_work_mode_id>]
+```
+
+这个方案只向申请人展示数据库当前发布的有效组合，冻结 Catalog revision 和稳定
+关系 ID，不允许生成非法的 Company、Position、Mode 组合，也不会因为多个申请人
+同时填写而互相改写原生 Form 的全局下拉选项。首版不把三个维度拆成原生 Google
+Form 的独立问题。
+
+如果未来产品明确要求 Company、Position、Mode 三个字段可以按任意顺序选择，并且
+每次选择都实时缩小其余一个或两个字段的候选范围，应改为自定义申请页面，例如
+Apps Script HTML Web App 或 Cloudflare Pages/Worker 页面，而不是继续扩展原生 Google
+Form。页面应读取受控发布的 Catalog options，把每个有效组合维护为一个不可拆分的
+tuple；任一字段变化后先筛选兼容 tuple 集合，再从集合中重新计算另外字段的去重
+候选项。提交时仍必须由服务端重新校验组合、当前状态和 Catalog revision，不能信任
+浏览器筛选结果。
+
+该未来页面还必须单独设计：
+
+- Catalog revision 更新时的 stale-page 提示、重新加载和已选值失效策略；
+- Resume 的安全上传路径、大小和类型校验、hash、R2/Drive 身份与最小权限；
+- Google 身份授权或其他申请人身份边界，以及不登录提交时的滥用防护；
+- 服务端生成稳定 source identity、幂等键、提交时间和审计记录；
+- 键盘操作、屏幕阅读器、移动端和错误恢复等可访问性要求；
+- 多申请人并发下每个浏览器会话的独立筛选状态。
+
+这是一项 Provider/UI 层的未来增强，不是当前 D1 Schema、Migration、历史记录、
+Workflow 数据模型或 Application/Candidate/Person 表结构的缺口。只有将来新的持久化、
+上传会话或审计需求无法由现有结构表达时，才另行评估 migration。

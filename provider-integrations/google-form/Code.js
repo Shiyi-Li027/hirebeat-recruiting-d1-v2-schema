@@ -181,6 +181,47 @@ function hireBeatResolveSubmittedOption_(label) {
   };
 }
 
+function hireBeatSubmissionFields_(answers, selected, respondentEmail) {
+  const resume = hireBeatScalar_(
+    answers["🎯 Resume"]
+      ?? answers["Resume"]
+      ?? answers["Resume File ID"]
+      ?? answers["Google Drive File ID"],
+  );
+  const candidateEmail = hireBeatScalar_(
+    answers["🎯 Contact_Email"]
+      ?? answers["Contact_Email"]
+      ?? answers["Email Address"]
+      ?? answers["Email"],
+  ) || hireBeatScalar_(respondentEmail);
+  return {
+    "Company ID": selected.companyId,
+    "Company Name": selected.companyName,
+    "Company Work Mode ID": selected.companyWorkModeId,
+    "Company Work Mode": selected.companyWorkModeName,
+    "Position ID": selected.positionId,
+    "Position Name": selected.positionName,
+    "Candidate Name": hireBeatScalar_(
+      answers["🧑‍🎓 Student"]
+        ?? answers["Student"]
+        ?? answers["Candidate Name"]
+        ?? answers["Name"]
+        ?? answers["Full Name"],
+    ),
+    "Email Address": candidateEmail,
+    "Phone Number": hireBeatScalar_(answers["Phone Number"] ?? answers["Phone"]),
+    "Start Working Date": hireBeatScalar_(
+      answers["Start_Date"] ?? answers["Start Working Date"] ?? answers["Start Date"],
+    ),
+    "End Working Date": hireBeatScalar_(
+      answers["End_Date"] ?? answers["End Working Date"] ?? answers["End Date"],
+    ),
+    "Work Duration": hireBeatScalar_(answers["Duration"] ?? answers["Work Duration"]),
+    "Resume File ID": resume,
+    "Catalog Revision": selected.revisionNumber,
+  };
+}
+
 /** Install this function as the Form-specific installable submit trigger. */
 function onHireBeatFormSubmit(event) {
   if (!event || !event.response || !event.source) throw new Error("google_form_submit_event_required");
@@ -188,25 +229,11 @@ function onHireBeatFormSubmit(event) {
   if (!responseId) throw new Error("google_form_response_id_missing");
   const answers = hireBeatAnswerMap_(event.response);
   const selected = hireBeatResolveSubmittedOption_(answers[HIREBEAT_GOOGLE_FORM.positionItemTitle]);
-  const resume = hireBeatScalar_(answers["Resume"] ?? answers["Resume File ID"] ?? answers["Google Drive File ID"]);
-  const candidateEmail = hireBeatScalar_(answers["Email Address"] ?? answers["Email"])
-    || hireBeatScalar_(event.response.getRespondentEmail());
-  const fields = {
-    "Company ID": selected.companyId,
-    "Company Name": selected.companyName,
-    "Company Work Mode ID": selected.companyWorkModeId,
-    "Company Work Mode": selected.companyWorkModeName,
-    "Position ID": selected.positionId,
-    "Position Name": selected.positionName,
-    "Candidate Name": hireBeatScalar_(answers["Candidate Name"] ?? answers["Name"] ?? answers["Full Name"]),
-    "Email Address": candidateEmail,
-    "Phone Number": hireBeatScalar_(answers["Phone Number"] ?? answers["Phone"]),
-    "Start Working Date": hireBeatScalar_(answers["Start Working Date"] ?? answers["Start Date"]),
-    "End Working Date": hireBeatScalar_(answers["End Working Date"] ?? answers["End Date"]),
-    "Work Duration": hireBeatScalar_(answers["Work Duration"] ?? answers["Duration"]),
-    "Resume File ID": resume,
-    "Catalog Revision": selected.revisionNumber,
-  };
+  const fields = hireBeatSubmissionFields_(
+    answers,
+    selected,
+    event.response.getRespondentEmail(),
+  );
   const formId = event.source.getId();
   const sourceRecordId = `form:${formId}:response:${responseId}`;
   const properties = HIREBEAT_GOOGLE_FORM.properties;

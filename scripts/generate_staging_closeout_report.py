@@ -887,6 +887,256 @@ def main() -> int:
             and terminal["normalized_count"] == 0
             and terminal["application_lineage_count"] == 0
         )
+    google_form_provider_native = execute(
+        """
+        WITH target_intake AS (
+          SELECT *
+          FROM raw_submission_intake_run
+          WHERE id = 29
+            AND source_system = 'google_form'
+        ),
+        target_raw AS (
+          SELECT id
+          FROM raw_submission
+          WHERE raw_submission_intake_run_id IN (
+            SELECT id FROM target_intake
+          )
+        ),
+        target_normalized AS (
+          SELECT id
+          FROM submission_normalized
+          WHERE raw_submission_id IN (
+            SELECT id FROM target_raw
+          )
+        )
+        SELECT
+          intake.id AS intake_run_id,
+          intake.submission_uuid,
+          intake.intake_status,
+          intake.attempt_count,
+          intake.technical_redelivery_count,
+          intake.last_error_code AS intake_last_error_code,
+          intake.completed_at AS intake_completed_at,
+
+          (SELECT COUNT(*) FROM target_raw)
+            AS raw_submission_count,
+
+          (SELECT COUNT(*)
+             FROM raw_submission_resume
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            ))
+            AS resume_count,
+
+          (SELECT resume_text_status
+             FROM raw_submission_resume
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            )
+            LIMIT 1)
+            AS resume_text_status,
+
+          (SELECT COUNT(*)
+             FROM outbox_event
+            WHERE aggregate_type = 'raw_submission'
+              AND aggregate_id IN (
+                SELECT id FROM target_raw
+              )
+              AND event_type = 'raw_submission.published')
+            AS raw_published_outbox_count,
+
+          (SELECT COUNT(*)
+             FROM etl_workflow_run
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            )
+              AND workflow_type = 'workflow_a')
+            AS workflow_a_count,
+
+          (SELECT workflow_status
+             FROM etl_workflow_run
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            )
+              AND workflow_type = 'workflow_a'
+            ORDER BY id DESC
+            LIMIT 1)
+            AS workflow_a_status,
+
+          (SELECT run_attempt_count
+             FROM etl_workflow_run
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            )
+              AND workflow_type = 'workflow_a'
+            ORDER BY id DESC
+            LIMIT 1)
+            AS workflow_a_attempt_count,
+
+          (SELECT last_error_code
+             FROM etl_workflow_run
+            WHERE raw_submission_id IN (
+              SELECT id FROM target_raw
+            )
+              AND workflow_type = 'workflow_a'
+            ORDER BY id DESC
+            LIMIT 1)
+            AS workflow_a_error,
+
+          (SELECT COUNT(*) FROM target_normalized)
+            AS normalized_count,
+
+          (SELECT COUNT(*)
+             FROM resume_extraction
+            WHERE submission_normalized_id IN (
+              SELECT id FROM target_normalized
+            ))
+            AS resume_extraction_count,
+
+          (SELECT COUNT(*)
+             FROM submission_dedup_run
+            WHERE target_submission_normalized_id IN (
+              SELECT id FROM target_normalized
+            ))
+            AS dedup_run_count,
+
+          (SELECT COUNT(*)
+             FROM application_source_lineage
+            WHERE source_raw_submission_id IN (
+              SELECT id FROM target_raw
+            ))
+            AS application_lineage_count,
+
+          (SELECT id
+             FROM application
+            WHERE id = 10)
+            AS application_id,
+
+          (SELECT id
+             FROM etl_workflow_run
+            WHERE id = 37
+              AND application_id = 10
+              AND workflow_type = 'workflow_b')
+            AS workflow_b_run_id,
+
+          (SELECT workflow_run_uuid
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_uuid,
+
+          (SELECT workflow_status
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_status,
+
+          (SELECT current_step_key
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_current_step_key,
+
+          (SELECT run_attempt_count
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_attempt_count,
+
+          (SELECT last_error_code
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_error,
+
+          (SELECT completed_at
+             FROM etl_workflow_run
+            WHERE id = 37)
+            AS workflow_b_completed_at,
+
+          (SELECT COUNT(*)
+             FROM ml_analysis_run
+            WHERE application_id = 10)
+            AS ml_run_count,
+
+          (SELECT COUNT(*)
+             FROM ml_recommendation_result
+            WHERE application_id = 10)
+            AS recommendation_count,
+
+          (SELECT COUNT(*)
+             FROM offer
+            WHERE application_id = 10)
+            AS offer_count,
+
+          (SELECT id
+             FROM offer
+            WHERE id = 5
+              AND application_id = 10)
+            AS offer_id,
+
+          (SELECT current_status
+             FROM offer
+            WHERE id = 5)
+            AS offer_status,
+
+          (SELECT status_version
+             FROM offer
+            WHERE id = 5)
+            AS offer_status_version,
+
+          (SELECT current_offer_version_id
+             FROM offer
+            WHERE id = 5)
+            AS current_offer_version_id,
+
+          (SELECT created_at
+             FROM offer
+            WHERE id = 5)
+            AS offer_created_at
+
+        FROM target_intake AS intake;
+        """
+    )
+
+    google_form_provider_native_passed = False
+    if len(google_form_provider_native) == 1:
+        evidence = google_form_provider_native[0]
+        google_form_provider_native_passed = (
+            evidence["intake_run_id"] == 29
+            and evidence["submission_uuid"]
+                == "667c2839-9f8e-528c-9e7e-4b0fcabc4def"
+            and evidence["intake_status"] == "succeeded"
+            and evidence["attempt_count"] == 1
+            and evidence["technical_redelivery_count"] == 0
+            and evidence["intake_last_error_code"] is None
+            and bool(evidence["intake_completed_at"])
+            and evidence["raw_submission_count"] == 1
+            and evidence["resume_count"] == 1
+            and evidence["resume_text_status"] == "available"
+            and evidence["raw_published_outbox_count"] == 1
+            and evidence["workflow_a_count"] == 1
+            and evidence["workflow_a_status"] == "succeeded"
+            and evidence["workflow_a_attempt_count"] == 1
+            and evidence["workflow_a_error"] is None
+            and evidence["normalized_count"] == 1
+            and evidence["resume_extraction_count"] == 1
+            and evidence["dedup_run_count"] == 1
+            and evidence["application_lineage_count"] == 1
+            and evidence["application_id"] == 10
+            and evidence["workflow_b_run_id"] == 37
+            and evidence["workflow_b_uuid"]
+                == "c53d6b8b-9d77-4876-bb9b-596d5dbfd214"
+            and evidence["workflow_b_status"] == "succeeded"
+            and evidence["workflow_b_current_step_key"] is None
+            and evidence["workflow_b_attempt_count"] == 1
+            and evidence["workflow_b_error"] is None
+            and bool(evidence["workflow_b_completed_at"])
+            and evidence["ml_run_count"] == 1
+            and evidence["recommendation_count"] == 1
+            and evidence["offer_count"] == 1
+            and evidence["offer_id"] == 5
+            and evidence["offer_status"] == "draft"
+            and evidence["offer_status_version"] == 1
+            and evidence["current_offer_version_id"] is None
+            and bool(evidence["offer_created_at"])
+        )
+
     manifests = [
         manifest_evidence(args.workflow_a_uuid),
         manifest_evidence(args.workflow_b_uuid),
@@ -935,13 +1185,14 @@ def main() -> int:
             outbox_terminal_boundaries_passed
         ),
         "workflow_step_fault_classification": workflow_step_faults_passed,
+        "google_form_provider_native_path": google_form_provider_native_passed,
         "provider_bridge_templates_present": all(
             (ROOT / relative_path).is_file()
             for relative_path in PROVIDER_BRIDGE_FILES
         ),
     }
     report = {
-        "schema_version": "hirebeat-staging-closeout-report-v8",
+        "schema_version": "hirebeat-staging-closeout-report-v9",
         "generated_at_utc": generated_at,
         "git_commit": commit,
         "checks": checks,
@@ -958,10 +1209,13 @@ def main() -> int:
         "outbox_workflow_retry_evidence": outbox_workflow_retry,
         "outbox_boundary_fault_evidence": outbox_boundary_faults,
         "workflow_step_fault_evidence": workflow_step_faults,
+        "google_form_provider_native_evidence": google_form_provider_native,
         "inspection_manifest_evidence": manifests,
+        "deferred_scope": [
+            "airtable_provider_native_submission_window",
+        ],
         "remaining_release_gates": [
             "Retain the successful GitHub Actions run for this exact commit.",
-            "Configure the implemented provider bridges with the real staging Google Form and Airtable object IDs, protected secrets, and native synthetic evidence.",
             "Wire durable catalog_sync_run/catalog_sync_target_run result reporting before production provider enablement.",
             "Create separate production resources and obtain GitHub Environment approval before production deployment.",
         ],

@@ -1,7 +1,7 @@
 # Provider-native Airtable and Google Form submission windows
 
 Version date: 2026-08-19
-Status: implementation foundation complete; external provider objects not yet enabled
+Status: Google Form staging provider window enabled and accepted; Airtable provider window remains pending
 
 ## 1. Confirmed boundary
 
@@ -46,18 +46,31 @@ No migration or table change is introduced in this stage.
 
 Create or select a Google Form owned by the staging Workspace account. The
 bound script expects exactly one `Position` item of type Dropdown or Multiple
-choice. The applicant-facing questions should use these titles:
+choice. The accepted staging Form uses this applicant-facing order and title
+contract. Emoji are part of the visible titles shown below; the bridge maps
+them back to the unchanged canonical Intake field names.
 
-| Title | Recommended native type | Required by provider bridge |
-|---|---|---:|
-| `Position` | Dropdown | Yes |
-| `Candidate Name` | Short answer | Yes |
-| `Email Address` | Short answer, or enable email collection | Yes |
-| `Phone Number` | Short answer | According to current intake policy |
-| `Start Working Date` | Date | Optional |
-| `End Working Date` | Date | Optional |
-| `Work Duration` | Short answer | Optional |
-| `Resume` | File upload, PDF only, one file | According to current intake policy |
+| Order | Applicant-facing title | Recommended native type | Required in Form |
+|---:|---|---|---:|
+| 1 | `🧑‍🎓 Student` | Short answer | Yes |
+| 2 | `🎯 Contact_Email` | Short answer | Yes |
+| 3 | `Position` | Dropdown | Yes |
+| 4 | `Duration` | Short answer | Yes, Form-only policy |
+| 5 | `🎯 Resume` | File upload, PDF only, one file | Yes |
+| 6 | `Start_Date` | Date | Yes |
+| 7 | `End_Date` | Date | Optional |
+
+`Phone Number` is intentionally absent from the accepted Google Form. The
+bridge continues to tolerate its legacy title, but an omitted phone is sent as
+`null`. The Provider bridge also retains the previous aliases (`Candidate
+Name`, `Email Address`, `Work Duration`, `Resume`, `Start Working Date`, and
+`End Working Date`) so an already-captured response or controlled rollback does
+not require a Schema or historical-data rewrite.
+
+`Duration` being required is enforced only by this Google Form presentation.
+It does not add a D1 constraint, migration, backfill or Workflow model change.
+The combined `Position` choice remains the only provider-visible representation
+of Company, Position, Work Mode and Catalog revision.
 
 Configure these Script Properties through Apps Script **Project Settings**:
 

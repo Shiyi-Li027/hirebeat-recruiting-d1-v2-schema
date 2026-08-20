@@ -479,20 +479,65 @@ it must never convert an unexecuted gate into a pass.
 
 ## 8. Provider-native staging acceptance
 
-After configuring the objects in `20_provider_native_submission_windows.md`:
+Status: **PASS — Google Form provider-native path**
 
-1. synchronize Google choices and verify every visible choice contains the
-   current revision plus a valid Position and Company Work Mode ID;
-2. open a Form page, publish a newer Catalog revision, resynchronize, and then
-   submit the already-open page; verify Raw preservation plus Workflow A's
-   current-state decision;
-3. deliver the same Google Form response twice and verify one logical Intake
-   run and one Raw publication;
-4. synchronize the Airtable Position mirror and verify active rows match the
-   latest D1 option tree while removed rows are inactive rather than deleted;
-5. submit one synthetic Airtable Form record twice through Automation replay
-   and verify one logical Intake run and one Raw publication;
-6. verify both source identities use the documented namespaced native
-   record/response IDs;
-7. run `PRAGMA foreign_key_check` and retain provider execution logs without
-   exporting applicant content or any secret.
+The real staging Google Form provider-native submission window has passed
+end-to-end synthetic acceptance.
+
+Accepted provider configuration:
+
+- Google Form ID:
+  `1xpkksrZGct0pyin4M_6WLSeaUueQlDIIpbBW5HyN5sk`
+- Catalog revision: `7`
+- Catalog choices retain stable Company, Position, work-mode, and revision IDs.
+- Form submission time is captured from the native Google Form response
+  timestamp and normalized to UTC for storage.
+- Phone Number is optional/omitted from the required submission contract.
+- Work Duration is enforced by the Google Form UI and does not require a D1
+  schema or migration change.
+
+Accepted staging evidence:
+
+- Intake run: `29`
+- Submission UUID: `667c2839-9f8e-528c-9e7e-4b0fcabc4def`
+- Intake status: `succeeded`
+- Intake attempt count: `1`
+- Raw submissions: `1`
+- Resume rows: `1`
+- Resume text status: `available`
+- Published raw-submission Outbox events: `1`
+- Workflow A: exactly one `succeeded` run with one attempt
+- Normalized submissions: `1`
+- Resume extractions: `1`
+- Dedup runs: `1`
+- Application source-lineage rows: `1`
+- Application: `10`
+- Workflow B run: `37`
+- Workflow B UUID:
+  `c53d6b8b-9d77-4876-bb9b-596d5dbfd214`
+- Workflow B status: `succeeded`
+- ML analysis runs: `1`
+- ML recommendation results: `1`
+- Offer: `5`
+- Offer status: `draft`
+- Foreign-key check: clean
+
+Accepted path:
+
+`Google Form → Apps Script provider bridge → authenticated Intake → Queue →`
+`Workflow A → Application 10 → Workflow B 37 → ML → Offer 5`
+
+Airtable provider-native submission-window implementation is explicitly
+deferred. It is not part of the current Google Form acceptance scope and does
+not block the Google Form channel.
+
+Future regression procedure:
+
+1. Synchronize the Google Form catalog choices from the protected staging
+   Operations API.
+2. Submit synthetic data only through the published Google Form.
+3. Confirm one successful Intake row, one raw submission, one resume,
+   one published Outbox event, one Workflow A run, one normalized submission,
+   one extraction, one dedup result, and one lineage row.
+4. Confirm Workflow B, ML analysis, recommendation, and Offer creation.
+5. Run `PRAGMA foreign_key_check;`.
