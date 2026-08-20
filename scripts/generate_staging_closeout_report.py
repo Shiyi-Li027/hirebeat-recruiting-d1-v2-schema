@@ -1091,7 +1091,8 @@ def main() -> int:
             AS offer_created_at
 
         FROM target_intake AS intake;
-        """
+        """,
+        True,
     )
 
     google_form_provider_native_passed = False
