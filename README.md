@@ -393,7 +393,8 @@ explicitly redacted samples may be committed.
 
 - Staging end-to-end acceptance is complete, including the Google Form provider-native submission path. The accepted evidence is recorded in `17_staging_end_to_end_acceptance_plan.md` and the staging closeout report.
 - Airtable provider-native activation is deliberately deferred. It does not block the accepted Google Form staging channel or the current production-infrastructure preparation.
-- Before production deployment, create separate production D1, R2, Queues and DLQ, Workers, Workflows, private Parser and ML services, custom domains, Cloudflare Access policies, environment-specific Secrets, and a protected GitHub production Environment with approval.
+- Initial production infrastructure is partially established: isolated production D1, R2, Queue and DLQ resources exist, and protected production deployment run #1 applied all 14 migrations to the production D1 after GitHub Environment approval. Verification found 84 schema-managed application tables, 120 explicit indexes, 0 foreign-key violations and no runtime data.
+- Before enabling the production channel, create and deploy isolated production Workers and Workflows, configure private Parser/ML services, custom domains, Cloudflare Access policies, production-only Secrets, reviewed reference data and provider-specific production configuration.
 - Durable `catalog_sync_run` / `catalog_sync_target_run` result reporting is implemented and has passed a real Google Form Catalog Sync in staging. Before relying on `failed_retryable` recovery in production, add automatic retry dispatch and configure production-only provider credentials and identifiers. Staging resources and Secrets must not be reused.
 - ML model/version expansion, chunked long-text embedding, Position-level work mode, reference-data releases, and external Offer document/e-signature integration remain deliberately deferred.
 

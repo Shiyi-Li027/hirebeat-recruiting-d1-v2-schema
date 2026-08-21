@@ -247,11 +247,36 @@ Access policy. Expanding access to ordinary business users must remain blocked
 until the permission matrix, API enforcement, authorization tests and staging
 user acceptance are complete.
 
-## 9. Production deployment prerequisites
+## 9. Initial production D1 migration evidence
+
+Status: **PASS for the initial schema migration only**. This does not activate
+the production provider channel or deploy the production Workers.
+
+- GitHub Actions workflow `Deploy production D1 migrations`, run `#1`, was
+  manually dispatched from `main` at commit `f4f49a0`.
+- The preflight validation job passed before the deployment job entered the
+  protected `production` Environment.
+- The production deployment required and received explicit Environment
+  reviewer approval.
+- All 14 repository migrations were applied to the isolated production D1
+  database `hirebeat_recruiting_d1_v2_prod`.
+- Remote verification found 84 schema-managed application tables. The raw
+  count excluding SQLite internal tables and `d1_migrations` was 85 because
+  Cloudflare also creates the managed `_cf_KV` table.
+- Remote verification found 120 explicit indexes and 0 foreign-key violations.
+- Representative Intake, ETL, Application, ML, Offer, Catalog Sync, Audit and
+  Outbox runtime tables all contained 0 rows, confirming that staging runtime
+  data was not copied into production.
+- D1 rejected `PRAGMA integrity_check` with `SQLITE_AUTH`; this is a platform
+  restriction on that pragma and is not evidence of database corruption.
+- No production Worker, Workflow, provider submission window or business-user
+  access was enabled by this migration run.
+
+## 10. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
-- Create isolated production D1, R2, Queues/DLQ, Workers and Workflows.
+- Isolated production D1, R2, Queue and DLQ resources have been created; create and deploy the isolated production Workers and Workflows.
 - Deploy private production Resume Parser and ML services and configure
   production-only service URLs and authentication.
 - Configure company-owned production custom domains and separate Cloudflare
