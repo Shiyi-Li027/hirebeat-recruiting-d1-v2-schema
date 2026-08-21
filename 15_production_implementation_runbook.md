@@ -272,13 +272,43 @@ the production provider channel or deploy the production Workers.
 - No production Worker, Workflow, provider submission window or business-user
   access was enabled by this migration run.
 
-## 10. Production deployment prerequisites
+## 10. Initial production Worker deployment evidence
+
+Status: **PASS for the initial Submission Ingress and ETL Orchestrator
+deployment only**. This does not enable production provider traffic or deploy
+the production Operations API.
+
+- GitHub Actions workflow `Deploy production Workers`, run `#2`, was manually
+  dispatched from `main` at commit `41ac450`.
+- Preflight validation passed before the deployment job entered the protected
+  `production` Environment.
+- The production deployment required and received explicit Environment
+  reviewer approval.
+- Submission Ingress deployment version
+  `315e3994-cda5-43c7-be29-5aaf7247f493` was created from commit `41ac450`.
+- ETL Orchestrator deployment version
+  `08a8896b-1587-4d1d-acc9-ca7acea002c5` was created from the same commit.
+- The production Intake Queue reports 2 producers and 1 consumer; the
+  production DLQ reports 1 consumer.
+- `hirebeat-workflow-a-prod-v1` and `hirebeat-workflow-b-prod-v1` are
+  registered to `hirebeat-etl-orchestrator-prod-v1`.
+- Production Resume Parser and ML inference services, dedicated invocation
+  identity, service authentication and Google Drive reader access are
+  configured.
+- Production D1 still reports 14 applied migrations, 0 foreign-key violations
+  and no representative runtime, PII, audit or Outbox records after deployment.
+- The production Operations API, custom-domain routes and provider business
+  channel remain excluded from this deployment.
+
+## 11. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
-- Isolated production D1, R2, Queue and DLQ resources have been created; create and deploy the isolated production Workers and Workflows.
-- Deploy private production Resume Parser and ML services and configure
-  production-only service URLs and authentication.
+- The isolated production D1, R2, Queue, DLQ, Resume Parser, ML service,
+  Submission Ingress, ETL Orchestrator and Workflows are deployed. Deploy and
+  protect the isolated production Operations API.
+- Complete production smoke testing for Parser/ML invocation, Queue and
+  Workflow processing, failure handling, monitoring and rollback.
 - Configure company-owned production custom domains and separate Cloudflare
   Access applications, AUD values and authorization policies.
 - Create a protected GitHub `production` Environment with manual approval and
