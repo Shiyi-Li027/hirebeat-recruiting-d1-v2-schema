@@ -339,10 +339,25 @@ Staging 端到端验收已经完成，包括 Google Form provider-native 实时�
 Airtable provider-native 申请窗口当前明确暂缓，不阻塞已通过验收的 Google Form
 staging 通道，也不阻塞 production 基础设施准备。
 
+初始 production D1 Schema migration 已完成并通过验证：
+
+- 受保护的 GitHub Actions `Deploy production D1 migrations` run `#1` 从
+  `main` commit `f4f49a0` 手工启动，并在 `production` Environment 人工审批后执行成功。
+- 隔离的 production D1 `hirebeat_recruiting_d1_v2_prod` 已应用全部 14 个 migrations。
+- 已验证 84 张应用 Schema 表、120 个显式索引和 0 个外键违规；Cloudflare 管理的
+  `_cf_KV` 使 `sqlite_master` 中排除 `d1_migrations` 后的总表数显示为 85。
+- 代表性运行、PII、审计和 Outbox 表均为空，未从 staging 或旧 D1 复制运行数据。
+- D1 remote SQL 禁止 `PRAGMA integrity_check`（`SQLITE_AUTH`）；这属于平台限制，
+  不能解释为数据库损坏。
+
+以上只确认初始 production D1 Schema migration，不代表 production Workers、
+provider channel、Parser/ML 或业务流量已经启用。
+
 Production 部署前仍必须完成：
 
-1. 创建独立的 production D1、R2、Queues/DLQ、Workers、Workflows，以及私有
-   Resume Parser 和 ML 服务；不得重新绑定或复用 staging 资源。
+1. 独立的 production D1、R2、Queue 和 DLQ 已创建；仍需创建并部署独立的
+   production Workers、Workflows，以及私有 Resume Parser 和 ML 服务；
+   不得重新绑定或复用 staging 资源。
 2. 配置 production 专用 custom domains、Cloudflare Access 应用与策略、
    环境变量和 Secrets。
 3. 创建受保护的 GitHub `production` Environment，并启用人工 approval；
