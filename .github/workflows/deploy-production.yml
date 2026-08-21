@@ -1,0 +1,128 @@
+name: Deploy production D1 migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY PRODUCTION D1 to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hirebeat-d1-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate production deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Require main branch and explicit confirmation
+        env:
+          DEPLOYMENT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production deployment is restricted to main."
+            exit 1
+          fi
+
+          if [[ "$DEPLOYMENT_CONFIRMATION" != "DEPLOY PRODUCTION D1" ]]; then
+            echo "Production confirmation text did not match."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository validation
+        run: npm test
+
+      - name: Validate production configuration isolation
+        run: npm run production:config:validate
+
+  deploy-production-d1:
+    name: Apply production D1 migrations
+    needs: preflight
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate protected production configuration
+        env:
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+          CLOUDFLARE_API_TOKEN_VALUE: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID_VALUE: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [[ -z "$PRODUCTION_D1_DATABASE_ID" ]]; then
+            echo "Missing production Environment variable: PRODUCTION_D1_DATABASE_ID"
+            exit 1
+          fi
+
+          if [[ -z "$CLOUDFLARE_API_TOKEN_VALUE" ]]; then
+            echo "Missing production Environment secret: CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+
+          if [[ -z "$CLOUDFLARE_ACCOUNT_ID_VALUE" ]]; then
+            echo "Missing production Environment secret: CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+      - name: Render reviewed production configuration
+        env:
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path("wrangler.production.example.toml")
+          target = Path("wrangler.production.toml")
+          placeholder = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+          database_id = os.environ["PRODUCTION_D1_DATABASE_ID"].strip()
+
+          if not re.fullmatch(
+              r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+              database_id,
+          ):
+              raise SystemExit("Invalid production D1 database ID format")
+
+          text = source.read_text(encoding="utf-8")
+          if text.count(placeholder) != 1:
+              raise SystemExit("Unexpected production D1 placeholder count")
+
+          target.write_text(
+              text.replace(placeholder, database_id, 1),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Apply unapplied migrations to production D1
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply DB --remote --config wrangler.production.toml
+
+      - name: Remove generated production configuration
+        if: always()
+        run: rm -f wrangler.production.toml
