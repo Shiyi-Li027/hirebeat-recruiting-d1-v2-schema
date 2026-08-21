@@ -179,14 +179,15 @@ UNIQUE(source_system, source_record_id)
 
 ### 外部 Catalog 同步的目标级 Queue / Outbox
 
-正式启用 Airtable、Google Form 或其他 Catalog external sync 时，应为每个实际同步目标建立独立 Queue 或 Outbox 投递记录，而不是用一条全局成功状态代表全部渠道。初始 Schema 已有 `catalog_sync_run` 与 `catalog_sync_target_run`，可冻结 `catalog_revision_id`、目标系统与表单/视图身份、attempt、next attempt 和最终状态；当前尚缺把 provider 执行结果可靠写入这两张表的 command/dispatcher。Airtable 成功但 Google 失败时只重试 Google；429、5xx 和网络错误自动退避，权限、字段映射、目标删除等永久错误直接 terminal/DLQ。只有在现有列不足以表达 lease、逐目标幂等键或 DLQ 关联时才增加 migration，不能错误地重复创建已经存在的目标表。
+正式启用 Airtable、Google Form 或其他 Catalog external sync 时，应为每个实际同步目标建立独立 Queue 或 Outbox 投递记录，而不是用一条全局成功状态代表全部渠道。初始 Schema 已有 `catalog_sync_run` 与 `catalog_sync_target_run`，可冻结 `catalog_revision_id`、目标系统与表单/视图身份、attempt、next attempt 和最终状态。Operations API 的幂等 start/result commands、目标级状态聚合、审计证据和 Google Form 结果回报已实现并通过本地测试；正式启用前仍需完成 staging 部署与真实 Google Form Catalog Sync 验证。自动消费 `failed_retryable` / `next_attempt_at` 的 Queue/Outbox dispatcher 仍属于后续能力。Airtable 成功但 Google 失败时只应重试 Google；429、5xx 和网络错误应自动退避，权限、字段映射、目标删除等永久错误应直接 terminal/DLQ。只有在现有列不足以表达 lease、逐目标幂等键或 DLQ 关联时才增加 migration，不能错误地重复创建已经存在的目标表。
 
 该未来能力还必须遵守当前自动恢复策略的共同语义：`max_attempts`
 表示包括首次在内的总尝试次数；每个目标独立幂等、独立 lease、独立退避、
 独立 terminal 状态；不能因为一个目标失败而回滚已经成功的其他目标，也不能
 通过删除 `catalog_revision` 来“回滚”外部系统。恢复方式应是重试失败目标或发布
-新的 revision/补偿事件。具体 command、dispatcher 和独立验收用例必须在外部
-同步渠道正式启用前落地；是否需要 migration 由现有字段差距决定。
+新的 revision/补偿事件。当前 command 与 Google Form 结果报告已落地；自动 dispatcher、失败目标
+独立重试和相应验收用例仍须在需要自动恢复的 production 外部同步渠道启用前完成；
+是否需要 migration 由现有字段差距决定。
 
 ## 12. Offer 回复期限治理与自动过期门禁
 
