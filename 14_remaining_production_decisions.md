@@ -350,14 +350,32 @@ staging 通道，也不阻塞 production 基础设施准备。
 - D1 remote SQL 禁止 `PRAGMA integrity_check`（`SQLITE_AUTH`）；这属于平台限制，
   不能解释为数据库损坏。
 
-以上只确认初始 production D1 Schema migration，不代表 production Workers、
-provider channel、Parser/ML 或业务流量已经启用。
+初始 production Worker 部署也已完成并通过基础验证：
+
+- 受保护的 GitHub Actions `Deploy production Workers` run `#2` 从 `main`
+  commit `41ac450` 手工启动，并在 `production` Environment 人工审批后成功。
+- `hirebeat-submission-ingress-prod-v1` 已部署为 version
+  `315e3994-cda5-43c7-be29-5aaf7247f493`。
+- `hirebeat-etl-orchestrator-prod-v1` 已部署为 version
+  `08a8896b-1587-4d1d-acc9-ca7acea002c5`。
+- production Intake Queue 已连接 2 个 producers 和 1 个 consumer；production
+  DLQ 已连接 1 个 consumer。
+- `hirebeat-workflow-a-prod-v1` 与 `hirebeat-workflow-b-prod-v1` 已注册到
+  production ETL Orchestrator。
+- production Resume Parser、ML inference、专用调用身份、服务认证和 Google
+  Drive reader 已配置，并通过 Drive PDF 下载验收。
+- 部署后 production D1 仍保留 14 个 migrations、0 个外键违规，代表性运行、
+  PII、审计和 Outbox 表仍为空。
+
+以上确认初始 production D1 Schema migration，以及 Submission Ingress 和 ETL
+Orchestrator 的首次部署。它不代表 production Operations API、custom domains、
+Cloudflare Access、provider channel 或真实业务流量已经启用。
 
 Production 部署前仍必须完成：
 
-1. 独立的 production D1、R2、Queue 和 DLQ 已创建；仍需创建并部署独立的
-   production Workers、Workflows，以及私有 Resume Parser 和 ML 服务；
-   不得重新绑定或复用 staging 资源。
+1. 独立的 production D1、R2、Queue、DLQ、Resume Parser、ML 服务、
+   Submission Ingress、ETL Orchestrator 和 Workflows 已创建或部署；仍需部署并
+   保护 production Operations API，且不得重新绑定或复用 staging 资源。
 2. 配置 production 专用 custom domains、Cloudflare Access 应用与策略、
    环境变量和 Secrets。
 3. 创建受保护的 GitHub `production` Environment，并启用人工 approval；
@@ -367,7 +385,8 @@ Production 部署前仍必须完成：
 5. `catalog_sync_run` / `catalog_sync_target_run` 结果报告已经在 staging
    通过真实 Google Form Catalog Sync 验证；如 production 需要依赖
    `failed_retryable` 自动恢复，还必须先补齐自动重试 dispatcher。
-6. 配置 production Parser/ML service URL、服务间认证和最小权限调用身份。
+6. production Parser/ML service URL、服务间认证和最小权限调用身份已配置；
+   仍需完成 production smoke test、失败路径验证、监控和回滚验收。
 7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
    不从旧 D1 或 staging D1 复制未经审核的运行数据。
 8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
