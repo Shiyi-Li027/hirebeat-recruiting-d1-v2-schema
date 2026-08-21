@@ -522,6 +522,27 @@ Accepted staging evidence:
 - Offer status: `draft`
 - Foreign-key check: clean
 
+Catalog Sync result-reporting acceptance recorded on 2026-08-21:
+
+- Staging Operations Worker version:
+  `bfd44887-144a-4a3c-8c6b-053668b1ca7d`
+- Catalog revision: `7`
+- Catalog Sync run: `2`
+- Catalog Sync target run: `2`
+- Run status: `succeeded`
+- Target status: `succeeded`
+- Expected targets: `1`
+- Succeeded targets: `1`
+- Failed targets: `0`
+- Target attempt count: `1`
+- External revision evidence: present
+- Retry/error fields: empty
+- Audit events: `60` for run creation and `61` for target result
+- Both audit events derived `actor_type = service` from the authenticated
+  Cloudflare Access service-token identity.
+- Both audit events recorded a non-empty `actor_id`; its environment-specific
+  value is intentionally omitted from tracked documentation.
+
 Accepted path:
 
 `Google Form → Apps Script provider bridge → authenticated Intake → Queue →`

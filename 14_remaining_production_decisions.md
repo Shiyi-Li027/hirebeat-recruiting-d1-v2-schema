@@ -349,8 +349,8 @@ Production 部署前仍必须完成：
    production migration 和部署必须经过该 Environment。
 4. 为 production Google Form bridge 配置 production 专用的 provider 标识和
    凭据；不得复用 staging token、service token 或其他 Secrets。
-5. 在启用 production provider-native 申请窗口前，在 staging 部署并验证已经实现的
-   `catalog_sync_run` / `catalog_sync_target_run` 结果报告；如 production 需要依赖
+5. `catalog_sync_run` / `catalog_sync_target_run` 结果报告已经在 staging
+   通过真实 Google Form Catalog Sync 验证；如 production 需要依赖
    `failed_retryable` 自动恢复，还必须先补齐自动重试 dispatcher。
 6. 配置 production Parser/ML service URL、服务间认证和最小权限调用身份。
 7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
