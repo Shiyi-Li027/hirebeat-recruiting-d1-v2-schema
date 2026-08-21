@@ -399,6 +399,18 @@ explicitly redacted samples may be committed.
 
 See [`03_future_optimization_recommendations.md`](03_future_optimization_recommendations.md) for the maintained optimization backlog.
 
+## Future Operations business access / 未来业务访问边界
+
+A business-facing Operations Console and application-level RBAC are deliberately
+deferred. Business users must not receive direct Cloudflare Dashboard, D1
+Console, API-token, GitHub, Workers, R2, Queue or DLQ access. The future internal
+page will call the Cloudflare Access-protected Operations API, which must enforce
+route-level roles and retain `audit_event` actor provenance. Until that
+authorization layer exists, production Operations API access must remain limited
+to reviewed administrator/operator identities. See
+[`03_future_optimization_recommendations.md`](03_future_optimization_recommendations.md)
+for the proposed access model.
+
 ## Documentation / 文档索引
 
 - [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md): local Git, GitHub, Wrangler, and D1 deployment guide
