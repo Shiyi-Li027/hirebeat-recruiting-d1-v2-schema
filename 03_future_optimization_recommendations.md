@@ -286,3 +286,123 @@ tuple；任一字段变化后先筛选兼容 tuple 集合，再从集合中重�
 这是一项 Provider/UI 层的未来增强，不是当前 D1 Schema、Migration、历史记录、
 Workflow 数据模型或 Application/Candidate/Person 表结构的缺口。只有将来新的持久化、
 上传会话或审计需求无法由现有结构表达时，才另行评估 migration。
+## 15. Operations 业务访问模型与内部管理页面（未来优化）
+
+### 当前能力与边界
+
+当前 Operations API 已实现以下基础安全能力：
+
+- 使用 Cloudflare Access JWT 验证请求身份；
+- 从 Access claims 中保留 member 或 service actor provenance；
+- 对业务命令执行输入验证和幂等控制；
+- 将关键操作及其执行身份写入 `audit_event`；
+- 通过受控命令修改 D1，并在需要时衔接 Outbox 或 Workflow。
+
+这些能力完成了身份认证和审计基础，但不等于完整的业务授权。
+有效的 Access JWT 只能证明请求者是谁以及其可以进入受保护应用，不能被解释为
+该请求者可以调用 Operations API 的所有路由。
+
+面向普通业务人员的内部 Operations Console、应用级角色映射以及路由级 RBAC
+目前明确延期，不属于当前 production 基础设施部署阶段。在这些能力实现之前，
+production Operations API 的 Cloudflare Access policy 必须仅允许经过审核的少量
+管理员或操作人员，不得直接向广泛业务用户开放。
+
+### 目标访问链路
+
+```text
+业务人员浏览器
+  -> 公司 Google / SSO 登录
+  -> Cloudflare Access 身份验证
+  -> HireBeat Operations Console
+  -> HTTPS JSON 请求
+  -> Operations API
+       -> 验证 Access 身份
+       -> 映射业务角色
+       -> 执行路由级权限检查
+       -> 验证输入和幂等键
+       -> 修改 D1
+       -> 写入 audit_event
+       -> 必要时触发 Outbox / Workflow
+```
+
+业务人员不应因此获得以下权限：
+
+- Cloudflare Dashboard 或 D1 Console 权限；
+- Cloudflare API Token；
+- GitHub repository 写入权限；
+- Workers、R2、Queues 或 DLQ 的基础设施访问权限；
+- 绕过 Operations API 直接修改生产数据的权限。
+
+### 推荐的权限划分
+
+| 主体 | 推荐权限 |
+| --- | --- |
+| 业务人员 | 仅通过内部页面和 Operations API 执行明确授权的业务操作 |
+| 普通开发人员 | GitHub Write；Cloudflare 仅授予工作需要范围内的只读权限 |
+| 部署开发人员 | 可以启动 GitHub Actions，但 production job 仍须经过受保护 Environment approval |
+| GitHub Actions | 使用限定到目标 Cloudflare account、且仅具有所需 D1 Edit 能力的最小权限 Token |
+| 系统管理员 | 保留 Cloudflare 管理权限、production approval 和紧急恢复权限 |
+
+GitHub 合并权限、production 部署审批权、Cloudflare 基础设施管理权和业务数据操作权
+应当分别管理，不能因为某人拥有其中一种权限，就自动获得其他权限。
+
+### 建议的业务角色
+
+| 角色 | 允许的业务能力 |
+| --- | --- |
+| HR Viewer | 只读查看职位、候选人、Application 和流程状态 |
+| Recruiting Operator | 创建或更新 Company、Position、Catalog 等招聘配置 |
+| Hiring Manager | 查看受管辖候选人，并执行经过限制的阶段或 Offer 操作 |
+| Operations Admin | 处理失败 Intake、恢复、重试和运行异常 |
+| Deployment Admin | 管理 GitHub、迁移和部署；不自动拥有所有业务 API 权限 |
+
+### 路由级权限示例
+
+权限检查必须按具体路由执行。例如：
+
+```text
+HR Viewer
+  GET /v1/...
+  allowed
+
+HR Viewer
+  POST /v1/catalog/positions
+  denied with 403
+
+Recruiting Operator
+  POST /v1/catalog/positions
+  allowed
+
+Recruiting Operator
+  POST /v1/intake-runs/{id}/recover
+  denied with 403
+```
+
+### 实现要求
+
+未来实现时必须满足：
+
+1. 默认拒绝；只有明确映射的角色和权限才能访问对应路由。
+2. 从已验证的 Access claims 提取 email、subject、service identity 或受信任 group。
+3. 身份映射与路由授权必须在 Operations API 内执行，不能只依赖前端隐藏按钮。
+4. 所有敏感写操作继续要求幂等键、输入验证和 `audit_event`。
+5. `audit_event` 必须保留 actor type、actor ID、操作、实体、时间和结果。
+6. service token 与人工 member identity 必须保持可区分。
+7. 权限不足返回 `403 Forbidden`；身份无效返回 `401 Unauthorized`。
+8. 禁止把 D1、R2、Queue 或 Cloudflare 管理凭据发送给业务浏览器。
+9. 为每个角色建立 allow/deny 测试，并覆盖越权访问、空身份和伪造 claims。
+10. 内部页面不得成为绕过 API 验证、审计或状态机约束的第二写入通道。
+
+### 建议实施顺序
+
+1. 冻结角色与路由 permission matrix。
+2. 在 Operations API 增加默认拒绝的 RBAC middleware。
+3. 为所有现有 Operations 路由声明所需权限。
+4. 添加角色 allow/deny、身份缺失和越权测试。
+5. 补充业务页面需要的安全只读查询接口。
+6. 构建 Access 保护的内部 Operations Console。
+7. 在 staging 完成业务用户验收与审计核对。
+8. 验收通过后，再把 production Access policy 扩展到对应业务用户或群组。
+
+在此阶段之前，内部管理页面和广泛业务用户接入保持延期；该延期不阻止隔离的
+production D1、R2、Queues、Workers 和迁移审批基础设施继续建设。

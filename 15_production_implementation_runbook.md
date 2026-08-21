@@ -226,7 +226,28 @@ Continue to follow `20_provider_native_submission_windows.md`; never place
 provider credentials, Access service-token secrets, Form IDs or production
 resource identifiers directly in tracked source files.
 
-## 8. Production deployment prerequisites
+## 8. Operations access boundary
+
+Cloudflare Access authentication and authenticated actor provenance are
+implemented for the Operations API. They establish who made a request, but do
+not yet provide application-level role mapping or route-level RBAC.
+
+Until the deferred RBAC layer and internal Operations Console are implemented:
+
+- restrict the production Access application to reviewed administrator/operator
+  identities;
+- do not treat any valid Access JWT as authorization for every API command;
+- do not onboard broad business-user groups to the production Operations API;
+- do not grant business users direct D1, Workers, R2, Queue, DLQ, GitHub or
+  Cloudflare API-token access;
+- continue recording all accepted business commands in `audit_event`.
+
+The production infrastructure may be deployed with this narrow administrative
+Access policy. Expanding access to ordinary business users must remain blocked
+until the permission matrix, API enforcement, authorization tests and staging
+user acceptance are complete.
+
+## 9. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
