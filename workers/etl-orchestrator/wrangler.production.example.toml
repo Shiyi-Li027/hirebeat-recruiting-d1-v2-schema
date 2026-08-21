@@ -1,0 +1,40 @@
+name = "hirebeat-etl-orchestrator-prod-v1"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+workers_dev = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2_prod"
+database_id = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+migrations_dir = "../../migrations"
+migrations_table = "d1_migrations"
+
+[[queues.producers]]
+binding = "INTAKE_QUEUE"
+queue = "hirebeat-submission-intake-prod-v1"
+
+[[workflows]]
+name = "hirebeat-workflow-a-prod-v1"
+binding = "WORKFLOW_A"
+class_name = "WorkflowA"
+
+[[workflows]]
+name = "hirebeat-workflow-b-prod-v1"
+binding = "WORKFLOW_B"
+class_name = "WorkflowB"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[vars]
+DEPLOYMENT_STAGE = "production"
+WORKFLOW_A_VERSION = "workflow-a-v1"
+WORKFLOW_B_VERSION = "workflow-b-v1"
+ML_SERVICE_URL = "REPLACE_WITH_PRIVATE_PRODUCTION_ML_SERVICE_URL"
+
+# Configure through the protected production deployment environment:
+# ML_SERVICE_AUTH_TOKEN
+# CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON
+# IDENTITY_HMAC_KEY_V1
+# ORCHESTRATOR_INTERNAL_AUTH_TOKEN

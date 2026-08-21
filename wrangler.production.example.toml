@@ -1,0 +1,13 @@
+name = "hirebeat-recruiting-d1-v2-schema-prod"
+compatibility_date = "2026-08-17"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2_prod"
+database_id = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+migrations_dir = "migrations"
+migrations_table = "d1_migrations"
+
+[[r2_buckets]]
+binding = "hirebeat_hr_raw_resumes_pdf_r2_v1"
+bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-prod-v1"
