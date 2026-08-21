@@ -1,11 +1,68 @@
-interface AccessClaims { aud:string|string[];email?:string;sub:string;iss:string;exp:number;nbf?:number; }
+export interface AccessClaims {
+  aud: string | string[];
+  email?: string;
+  sub: string;
+  common_name?: string;
+  type?: string;
+  iss: string;
+  exp: number;
+  nbf?: number;
+}
+
+export type AccessActorType = "member" | "service";
+
+export interface AccessActor {
+  actorId: string;
+  actorType: AccessActorType;
+}
 
 function decode(value:string):Uint8Array{
   const normalized=value.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(value.length/4)*4,"=");
   return Uint8Array.from(atob(normalized),(character)=>character.charCodeAt(0));
 }
 
-export async function authenticateAccess(request:Request,teamDomain:string,expectedAud:string):Promise<{actor:string;claims:AccessClaims}>{
+export function accessActorFromClaims(
+  claims: Pick<
+    AccessClaims,
+    "email" | "sub" | "common_name"
+  >,
+): AccessActor {
+  const email = claims.email?.trim() ?? "";
+  if (email) {
+    return {
+      actorId: email,
+      actorType: "member",
+    };
+  }
+
+  const subject = claims.sub?.trim() ?? "";
+  if (subject) {
+    return {
+      actorId: subject,
+      actorType: "member",
+    };
+  }
+
+  const commonName = claims.common_name?.trim() ?? "";
+  if (commonName) {
+    return {
+      actorId: commonName,
+      actorType: "service",
+    };
+  }
+
+  throw new Error("access_jwt_actor_missing");
+}
+
+export async function authenticateAccess(
+  request: Request,
+  teamDomain: string,
+  expectedAud: string,
+): Promise<{
+  actor: string;
+  actorType: AccessActorType;
+  claims: AccessClaims;
+}> {
   const jwt=request.headers.get("cf-access-jwt-assertion");
   if(!jwt)throw new Error("access_jwt_missing");
   const parts=jwt.split(".");if(parts.length!==3)throw new Error("access_jwt_malformed");
@@ -22,5 +79,11 @@ export async function authenticateAccess(request:Request,teamDomain:string,expec
   const verified=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,decode(parts[2]),new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
   const now=Math.floor(Date.now()/1000);const audiences=Array.isArray(claims.aud)?claims.aud:[claims.aud];
   if(!verified||!audiences.includes(expectedAud)||claims.exp<=now||(claims.nbf??0)>now||claims.iss.replace(/\/$/,"")!==domain)throw new Error("access_jwt_claims_invalid");
-  return{actor:claims.email??claims.sub,claims};
+  const actor = accessActorFromClaims(claims);
+
+  return {
+    actor: actor.actorId,
+    actorType: actor.actorType,
+    claims,
+  };
 }

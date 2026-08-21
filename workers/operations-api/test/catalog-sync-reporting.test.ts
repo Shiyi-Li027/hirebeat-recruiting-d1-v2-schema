@@ -220,6 +220,7 @@ function fakeCatalogSyncDatabase(
   state: {
     batch_calls: number;
     batch_statement_count: number;
+    batch_values: unknown[][];
   };
 } {
   const prior = options.prior ?? null;
@@ -228,6 +229,7 @@ function fakeCatalogSyncDatabase(
   const state = {
     batch_calls: 0,
     batch_statement_count: 0,
+    batch_values: [] as unknown[][],
   };
 
   const result = {
@@ -274,6 +276,10 @@ function fakeCatalogSyncDatabase(
     async batch(statements: unknown[]) {
       state.batch_calls += 1;
       state.batch_statement_count = statements.length;
+      state.batch_values = statements.map(
+        (statement) =>
+          (statement as { values: unknown[] }).values,
+      );
 
       return [
         {
@@ -313,7 +319,8 @@ test("Catalog Sync start atomically creates run, target and audit evidence", asy
       target_type: "google_form",
       target_key: "form-123",
     },
-    "test@example.com",
+    "service-client-id",
+    "service",
   );
 
   assert.deepEqual(result, {
@@ -329,6 +336,11 @@ test("Catalog Sync start atomically creates run, target and audit evidence", asy
 
   assert.equal(state.batch_calls, 1);
   assert.equal(state.batch_statement_count, 3);
+  assert.equal(state.batch_values[2][2], "service");
+  assert.equal(
+    state.batch_values[2][3],
+    "service-client-id",
+  );
 });
 
 test("Catalog Sync start replays prior idempotent command evidence", async () => {
@@ -405,6 +417,7 @@ function fakeCatalogSyncResultDatabase(
     batch_calls: number;
     batch_statement_count: number;
     batch_sql: string[];
+    batch_values: unknown[][];
   };
 } {
   const prior = options.prior ?? null;
@@ -418,6 +431,7 @@ function fakeCatalogSyncResultDatabase(
     batch_calls: 0,
     batch_statement_count: 0,
     batch_sql: [] as string[],
+    batch_values: [] as unknown[][],
   };
 
   const result = {
@@ -486,6 +500,10 @@ function fakeCatalogSyncResultDatabase(
       state.batch_sql = statements.map(
         (statement) =>
           (statement as { sql: string }).sql,
+      );
+      state.batch_values = statements.map(
+        (statement) =>
+          (statement as { values: unknown[] }).values,
       );
 
       return [
@@ -560,7 +578,8 @@ test(
           external_revision_key:
             "snapshot-sha256",
         },
-        "test@example.com",
+        "service-client-id",
+        "service",
       );
 
     assert.equal(
@@ -572,6 +591,11 @@ test(
 
     assert.equal(state.batch_calls, 1);
     assert.equal(state.batch_statement_count, 3);
+    assert.equal(state.batch_values[2][2], "service");
+    assert.equal(
+      state.batch_values[2][3],
+      "service-client-id",
+    );
 
     assert.match(
       state.batch_sql[0],
@@ -591,31 +615,31 @@ test(
     );
     assert.match(
       state.batch_sql[2],
-      /target\.target_status = \?8/,
+      /target\.target_status = \?9/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.updated_at = \?9/,
+      /target\.updated_at = \?10/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.external_revision_key IS \?10/,
+      /target\.external_revision_key IS \?11/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.last_error_code IS \?11/,
+      /target\.last_error_code IS \?12/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.last_error_detail IS \?12/,
+      /target\.last_error_detail IS \?13/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.next_attempt_at IS \?13/,
+      /target\.next_attempt_at IS \?14/,
     );
     assert.match(
       state.batch_sql[2],
-      /target\.completed_at IS \?14/,
+      /target\.completed_at IS \?15/,
     );
   },
 );
