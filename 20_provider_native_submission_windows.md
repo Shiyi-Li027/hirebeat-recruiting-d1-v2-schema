@@ -221,9 +221,10 @@ Before enabling a production provider-native submission window:
    identifiers, Cloudflare Access service credentials, and application Secrets.
 3. Do not reuse staging service tokens, authentication tokens, Form identifiers,
    runtime bindings, or other Secrets.
-4. Deploy and verify the implemented `catalog_sync_run` and
-   `catalog_sync_target_run` result-reporting path in staging. Add an automatic
-   retry dispatcher before relying on `failed_retryable` recovery in production.
+4. The implemented `catalog_sync_run` and
+   `catalog_sync_target_run` result-reporting path has passed a real Google Form
+   Catalog Sync in staging. Add an automatic retry dispatcher before relying on
+   `failed_retryable` recovery in production.
 5. After protected production deployment approval, submit one synthetic
    production smoke-test application and verify Intake, Workflow A,
    Application lineage, Workflow B, ML, and Offer evidence before opening the

@@ -240,10 +240,10 @@ The following items remain required before production enablement:
 - Configure production-only Google Form provider identifiers, Ingress
   credentials and Cloudflare Access service credentials; do not reuse staging
   tokens or Secrets.
-- Deploy and verify the implemented `catalog_sync_run` /
-  `catalog_sync_target_run` result-reporting path in staging before enabling the
-  production provider-native submission window. Add an automatic retry
-  dispatcher before relying on `failed_retryable` recovery in production.
+- The implemented `catalog_sync_run` / `catalog_sync_target_run`
+  result-reporting path has passed a real Google Form Catalog Sync in staging.
+  Add an automatic retry dispatcher before relying on `failed_retryable`
+  recovery in production.
 - Import an explicitly reviewed production Reference/Catalog seed instead of
   copying unreviewed staging runtime data.
 - Rotate or replace every credential that has appeared in an attachment,
