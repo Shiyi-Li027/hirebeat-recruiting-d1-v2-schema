@@ -60,6 +60,86 @@ function hireBeatOperationsGet_(path) {
   return hireBeatParseJsonResponse_(response, "operations_get");
 }
 
+function hireBeatOperationsPost_(path, payload) {
+  const properties = HIREBEAT_GOOGLE_FORM.properties;
+  const response = UrlFetchApp.fetch(
+    `${hireBeatHttpsBaseUrl_(properties.operationsBaseUrl)}${path}`,
+    {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "CF-Access-Client-Id": hireBeatRequiredProperty_(
+          properties.accessClientId
+        ),
+        "CF-Access-Client-Secret": hireBeatRequiredProperty_(
+          properties.accessClientSecret
+        ),
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    },
+  );
+
+  return hireBeatParseJsonResponse_(response, "operations_post");
+}
+
+function hireBeatCatalogSyncStartCommand_(
+  catalog,
+  formId,
+  invocationId
+) {
+  const catalogRevisionId = Number(catalog?.revision?.id);
+
+  if (
+    !Number.isInteger(catalogRevisionId) ||
+    catalogRevisionId < 1
+  ) {
+    throw new Error("catalog_revision_id_missing");
+  }
+
+  const targetKey = String(formId || "").trim();
+  if (!targetKey) {
+    throw new Error("google_form_id_missing");
+  }
+
+  const invocationKey = String(invocationId || "").trim();
+  if (!invocationKey) {
+    throw new Error("catalog_sync_invocation_id_missing");
+  }
+
+  const idempotencyKey =
+    `google-form-catalog-sync:${targetKey}:` +
+    `${catalogRevisionId}:${invocationKey}`;
+
+  if (idempotencyKey.length > 200) {
+    throw new Error("catalog_sync_idempotency_key_too_long");
+  }
+
+  return {
+    idempotency_key: idempotencyKey,
+    catalog_revision_id: catalogRevisionId,
+    target_type: "google_form",
+    target_key: targetKey,
+  };
+}
+
+function hireBeatCatalogSyncFailureStatus_(error) {
+  const message = String(
+    error && error.message ? error.message : error || ""
+  );
+
+  if (
+    /_http_(408|425|429|5\d\d)(?:\D|$)/i.test(message) ||
+    /(timed?\s*out|temporar(?:y|ily)|service\s+unavailable|network\s+error)/i.test(
+      message
+    )
+  ) {
+    return "failed_retryable";
+  }
+
+  return "failed_terminal";
+}
+
 function hireBeatCatalogOptionRows_(catalog) {
   const revisionNumber = Number(catalog?.revision?.revision_number);
   if (!Number.isInteger(revisionNumber) || revisionNumber < 1) {
@@ -111,27 +191,224 @@ function hireBeatPositionItem_(form) {
   throw new Error("position_item_must_be_list_or_multiple_choice");
 }
 
+function hireBeatCatalogSyncResultCommand_(
+  targetRunId,
+  invocationId,
+  resultStatus,
+  externalRevisionKey,
+  error
+) {
+  const parsedTargetRunId = Number(targetRunId);
+  if (
+    !Number.isInteger(parsedTargetRunId) ||
+    parsedTargetRunId < 1
+  ) {
+    throw new Error("catalog_sync_target_run_id_missing");
+  }
+
+  const invocationKey = String(invocationId || "").trim();
+  if (!invocationKey) {
+    throw new Error("catalog_sync_invocation_id_missing");
+  }
+
+  if (
+    resultStatus !== "succeeded" &&
+    resultStatus !== "failed_retryable" &&
+    resultStatus !== "failed_terminal"
+  ) {
+    throw new Error("catalog_sync_result_status_invalid");
+  }
+
+  const idempotencyKey =
+    `google-form-catalog-sync-result:` +
+    `${parsedTargetRunId}:${invocationKey}`;
+
+  if (idempotencyKey.length > 200) {
+    throw new Error(
+      "catalog_sync_result_idempotency_key_too_long"
+    );
+  }
+
+  if (resultStatus === "succeeded") {
+    return {
+      idempotency_key: idempotencyKey,
+      result_status: "succeeded",
+      external_revision_key:
+        externalRevisionKey === null ||
+        externalRevisionKey === undefined
+          ? null
+          : String(externalRevisionKey).slice(0, 500),
+      last_error_code: null,
+      last_error_detail: null,
+    };
+  }
+
+  const message = String(
+    error && error.message ? error.message : error || ""
+  ).trim();
+
+  const errorCode =
+    String(message.split(":", 1)[0] || "")
+      .trim()
+      .slice(0, 200) ||
+    "provider_catalog_sync_failed";
+
+  return {
+    idempotency_key: idempotencyKey,
+    result_status: resultStatus,
+    external_revision_key: null,
+    last_error_code: errorCode,
+    last_error_detail:
+      message.slice(0, 2000) ||
+      "Provider Catalog synchronization failed.",
+  };
+}
+
 /** Explicitly run this when opening/re-enabling the Google Form channel. */
 function syncHireBeatCatalogOptions() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+
   try {
-    const catalog = hireBeatOperationsGet_("/v1/catalog/options");
-    const options = hireBeatCatalogOptionRows_(catalog);
+    const catalog = hireBeatOperationsGet_(
+      "/v1/catalog/options"
+    );
+
     const form = FormApp.getActiveForm();
-    if (!form) throw new Error("script_must_be_bound_to_google_form");
-    hireBeatPositionItem_(form).setChoiceValues(options.map((option) => option.label));
-    const properties = HIREBEAT_GOOGLE_FORM.properties;
-    PropertiesService.getScriptProperties().setProperties({
-      [properties.latestRevision]: String(catalog.revision.revision_number),
-      [properties.latestSnapshotSha256]: String(catalog.revision.snapshot_sha256),
-      [properties.latestSyncedAt]: new Date().toISOString(),
-    });
-    return {
-      formId: form.getId(),
-      catalogRevision: catalog.revision.revision_number,
-      optionCount: options.length,
-    };
+    if (!form) {
+      throw new Error(
+        "script_must_be_bound_to_google_form"
+      );
+    }
+
+    const invocationId = Utilities.getUuid();
+    const startCommand =
+      hireBeatCatalogSyncStartCommand_(
+        catalog,
+        form.getId(),
+        invocationId
+      );
+
+    const startResult = hireBeatOperationsPost_(
+      "/v1/catalog-sync-runs",
+      startCommand
+    );
+
+    const targetRunId = Number(
+      startResult.catalog_sync_target_run_id
+    );
+
+    if (
+      !Number.isInteger(targetRunId) ||
+      targetRunId < 1
+    ) {
+      throw new Error(
+        "catalog_sync_target_run_id_missing"
+      );
+    }
+
+    try {
+      const options =
+        hireBeatCatalogOptionRows_(catalog);
+
+      hireBeatPositionItem_(form).setChoiceValues(
+        options.map((option) => option.label)
+      );
+
+      const properties =
+        HIREBEAT_GOOGLE_FORM.properties;
+
+      const syncedAt = new Date().toISOString();
+
+      PropertiesService
+        .getScriptProperties()
+        .setProperties({
+          [properties.latestRevision]:
+            String(
+              catalog.revision.revision_number
+            ),
+          [properties.latestSnapshotSha256]:
+            String(
+              catalog.revision.snapshot_sha256
+            ),
+          [properties.latestSyncedAt]:
+            syncedAt,
+        });
+
+      const externalRevisionKey =
+        `${catalog.revision.revision_number}:` +
+        `${catalog.revision.snapshot_sha256}`;
+
+      const resultCommand =
+        hireBeatCatalogSyncResultCommand_(
+          targetRunId,
+          invocationId,
+          "succeeded",
+          externalRevisionKey,
+          null
+        );
+
+      const result = hireBeatOperationsPost_(
+        `/v1/catalog-sync-target-runs/` +
+          `${targetRunId}/result`,
+        resultCommand
+      );
+
+      return {
+        formId: form.getId(),
+        catalogRevision:
+          catalog.revision.revision_number,
+        optionCount: options.length,
+        catalogSyncRunId:
+          startResult.catalog_sync_run_id,
+        catalogSyncTargetRunId:
+          targetRunId,
+        catalogSyncStatus:
+          result.sync_status,
+      };
+    } catch (error) {
+      const resultStatus =
+        hireBeatCatalogSyncFailureStatus_(error);
+
+      const failureCommand =
+        hireBeatCatalogSyncResultCommand_(
+          targetRunId,
+          invocationId,
+          resultStatus,
+          null,
+          error
+        );
+
+      try {
+        hireBeatOperationsPost_(
+          `/v1/catalog-sync-target-runs/` +
+            `${targetRunId}/result`,
+          failureCommand
+        );
+      } catch (reportingError) {
+        const originalMessage = String(
+          error && error.message
+            ? error.message
+            : error
+        );
+
+        const reportingMessage = String(
+          reportingError &&
+          reportingError.message
+            ? reportingError.message
+            : reportingError
+        );
+
+        throw new Error(
+          `catalog_sync_result_reporting_failed:` +
+          `${reportingMessage}:` +
+          `original_catalog_sync_error:` +
+          `${originalMessage}`
+        );
+      }
+
+      throw error;
+    }
   } finally {
     lock.releaseLock();
   }
