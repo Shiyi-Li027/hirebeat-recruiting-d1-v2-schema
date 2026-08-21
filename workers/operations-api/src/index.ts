@@ -44,9 +44,20 @@ export default {
       const positionId=idFromPath(url.pathname,/^\/v1\/catalog\/positions\/(\d+)$/);
       if(request.method==="PATCH"&&positionId)return response(await updatePosition(env.DB,positionId,await jsonBody(request),auth.actor));
       if(request.method==="POST"&&url.pathname==="/v1/catalog/revisions")return response(await publishCatalogRevision(env.DB,await jsonBody(request),auth.actor),201);
-      if(request.method==="POST"&&url.pathname==="/v1/catalog-sync-runs")return response(await beginCatalogSyncRun(env.DB,await jsonBody(request),auth.actor),201);
+      if(request.method==="POST"&&url.pathname==="/v1/catalog-sync-runs")return response(await beginCatalogSyncRun(
+        env.DB,
+        await jsonBody(request),
+        auth.actor,
+        auth.actorType,
+      ),201);
       const catalogSyncTargetRunId=idFromPath(url.pathname,/^\/v1\/catalog-sync-target-runs\/(\d+)\/result$/);
-      if(request.method==="POST"&&catalogSyncTargetRunId)return response(await reportCatalogSyncTargetResult(env.DB,catalogSyncTargetRunId,await jsonBody(request),auth.actor));
+      if(request.method==="POST"&&catalogSyncTargetRunId)return response(await reportCatalogSyncTargetResult(
+        env.DB,
+        catalogSyncTargetRunId,
+        await jsonBody(request),
+        auth.actor,
+        auth.actorType,
+      ));
       const mlApplicationId=idFromPath(url.pathname,/^\/v1\/applications\/(\d+)\/ml-recommendation$/);
       if(request.method==="POST"&&mlApplicationId)return response(await requestMlRecommendation(env.DB,mlApplicationId,await jsonBody(request),auth.actor),202);
       const intakeRunId=idFromPath(url.pathname,/^\/v1\/intake-runs\/(\d+)\/recover$/);

@@ -1,3 +1,4 @@
+import type { AccessActorType } from "./access-auth";
 import { commandKey } from "./helpers";
 
 export type CatalogSyncTargetType =
@@ -202,6 +203,7 @@ export async function beginCatalogSyncRun(
   db: D1Database,
   body: Record<string, unknown>,
   actor: string,
+  actorType: AccessActorType = "member",
 ): Promise<Record<string, unknown>> {
   const idempotencyKey = commandKey(body);
   const prior = await priorCatalogSyncCommand(
@@ -310,9 +312,9 @@ export async function beginCatalogSyncRun(
            ?2,
            'catalog_sync_run',
            run.id,
-           'member',
            ?3,
            ?4,
+           ?5,
            'provider_catalog_sync_requested',
            'A provider Catalog synchronization run was requested.',
            json_object(
@@ -325,16 +327,17 @@ export async function beginCatalogSyncRun(
              'target_key', target.target_key,
              'target_status', target.target_status
            ),
-           ?5,
-           ?5
+           ?6,
+           ?6
          FROM catalog_sync_run AS run
          JOIN catalog_sync_target_run AS target
            ON target.catalog_sync_run_id = run.id
-         WHERE run.catalog_sync_run_uuid = ?6
+         WHERE run.catalog_sync_run_uuid = ?7
          RETURNING event_metadata_json`,
       ).bind(
         auditUuid,
         CATALOG_SYNC_START_EVENT_TYPE,
+        actorType,
         actor,
         idempotencyKey,
         now,
@@ -472,6 +475,7 @@ export async function reportCatalogSyncTargetResult(
   targetRunId: number,
   body: Record<string, unknown>,
   actor: string,
+  actorType: AccessActorType = "member",
 ): Promise<Record<string, unknown>> {
   if (
     !Number.isSafeInteger(targetRunId) ||
@@ -679,9 +683,9 @@ export async function reportCatalogSyncTargetResult(
            ?2,
            'catalog_sync_target_run',
            target.id,
-           'member',
            ?3,
            ?4,
+           ?5,
            'provider_catalog_sync_result',
            'A provider Catalog synchronization result was reported.',
            json_object(
@@ -705,24 +709,25 @@ export async function reportCatalogSyncTargetResult(
              'failed_target_count',
                run.failed_target_count
            ),
-           ?5,
-           ?5
+           ?6,
+           ?6
          FROM catalog_sync_target_run AS target
          JOIN catalog_sync_run AS run
            ON run.id = target.catalog_sync_run_id
-         WHERE target.id = ?6
-           AND target.attempt_count = ?7
-           AND target.target_status = ?8
-           AND target.updated_at = ?9
-           AND target.external_revision_key IS ?10
-           AND target.last_error_code IS ?11
-           AND target.last_error_detail IS ?12
-           AND target.next_attempt_at IS ?13
-           AND target.completed_at IS ?14
+         WHERE target.id = ?7
+           AND target.attempt_count = ?8
+           AND target.target_status = ?9
+           AND target.updated_at = ?10
+           AND target.external_revision_key IS ?11
+           AND target.last_error_code IS ?12
+           AND target.last_error_detail IS ?13
+           AND target.next_attempt_at IS ?14
+           AND target.completed_at IS ?15
          RETURNING event_metadata_json`,
       ).bind(
         auditUuid,
         CATALOG_SYNC_RESULT_EVENT_TYPE,
+        actorType,
         actor,
         idempotencyKey,
         now,
