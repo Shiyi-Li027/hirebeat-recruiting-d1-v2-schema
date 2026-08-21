@@ -10,6 +10,7 @@ on:
       - "scripts/**"
       - "migrations/**"
       - "schema/**"
+      - "wrangler*.toml"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/validate-production-code.yml"
@@ -33,6 +34,8 @@ jobs:
       - run: npm ci
       - name: Validate schema and migrations
         run: python3 scripts/validate_schema.py --check-config
+      - name: Validate production configuration isolation
+        run: npm run production:config:validate
       - name: Reject stale generated schema governance artifacts
         run: |
           npm run schema:build

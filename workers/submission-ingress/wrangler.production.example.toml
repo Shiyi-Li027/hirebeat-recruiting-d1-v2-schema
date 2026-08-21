@@ -1,0 +1,49 @@
+name = "hirebeat-submission-ingress-prod-v1"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+workers_dev = false
+preview_urls = false
+
+# Add a reviewed company-owned production custom-domain route before deployment.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2_prod"
+database_id = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+migrations_dir = "../../migrations"
+migrations_table = "d1_migrations"
+
+[[r2_buckets]]
+binding = "hirebeat_hr_raw_resumes_pdf_r2_v1"
+bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-prod-v1"
+
+[[queues.producers]]
+binding = "INTAKE_QUEUE"
+queue = "hirebeat-submission-intake-prod-v1"
+
+[[queues.consumers]]
+queue = "hirebeat-submission-intake-prod-v1"
+dead_letter_queue = "hirebeat-submission-intake-dlq-prod-v1"
+max_batch_size = 5
+max_batch_timeout = 1
+max_retries = 4
+retry_delay = 30
+
+[[queues.consumers]]
+queue = "hirebeat-submission-intake-dlq-prod-v1"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 2
+
+[vars]
+DEPLOYMENT_STAGE = "production"
+SOURCE_SCHEMA_VERSION = "canonical-intake-v1"
+SUBMISSION_UUID_NAMESPACE = "REPLACE_WITH_PRODUCTION_SUBMISSION_UUID_NAMESPACE"
+PARSER_SERVICE_URL = "REPLACE_WITH_PRIVATE_PRODUCTION_PARSER_SERVICE_URL"
+
+# Configure through the protected production deployment environment:
+# SUBMISSION_HMAC_KEY_V1
+# INGRESS_INTERNAL_AUTH_TOKEN
+# GOOGLE_SERVICE_ACCOUNT_JSON
+# CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON
+# PARSER_SERVICE_AUTH_TOKEN

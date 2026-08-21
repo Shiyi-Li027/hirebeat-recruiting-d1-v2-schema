@@ -1,0 +1,19 @@
+name = "hirebeat-operations-api-prod-v1"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+workers_dev = false
+preview_urls = false
+
+# Add a reviewed company-owned production custom-domain route before deployment.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hirebeat_recruiting_d1_v2_prod"
+database_id = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+migrations_dir = "../../migrations"
+migrations_table = "d1_migrations"
+
+[vars]
+DEPLOYMENT_STAGE = "production"
+ACCESS_TEAM_DOMAIN = "REPLACE_WITH_PRODUCTION_ACCESS_TEAM_DOMAIN"
+ACCESS_AUD = "REPLACE_WITH_PRODUCTION_ACCESS_AUD"
