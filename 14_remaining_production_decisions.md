@@ -136,11 +136,24 @@ Worker 把 Airtable Catalog 同步进 D1，再由 D1 发布 revision。需要额
 
 已确认：`D04=A`。
 
+### 当前 production 执行范围（2026-08-22）
+
+`D04=A` 继续有效，但六个现有 CSV 的初始 Reference/Catalog 批量导入现明确标记为
+**DEFERRED**。当前 production 验收只执行一条经过明确审核的
+`Company -> Company Work Mode -> Position -> Catalog Revision` 最小写入链路，
+并通过受 Cloudflare Access 保护的 Operations API 完成读取和审计核对。
+
+未来如补充批量 importer，它必须只是 Operations API 客户端：先 dry-run，按依赖顺序
+逐条调用 API，使用确定性幂等键，支持 checkpoint/resume，并输出逐行结果和审计身份。
+禁止绕过 Operations API 直接写 production D1；本次延期也不授权复制 staging 或旧 D1
+的运行数据。
+
 ## D05/D06. 新库数据来源（已冻结，不再询问）
 
 已确认完全不迁移旧版数据库中的任何 Reference、Catalog、Submission、Application、
-Candidate、ML、Hiring 或 Offer 数据。v2 新库从空业务数据开始，所有新数据通过新版
-Reference/Catalog importer 和实时 Submission Ingress 逐条重新导入。旧库不属于 v2
+Candidate、ML、Hiring 或 Offer 数据。v2 新库从空业务数据开始；经过审核的
+Reference/Catalog 数据通过受 Access 保护的 Operations API 创建，Submission 通过实时
+Ingress 进入。六个现有 CSV 的初始批量 importer 当前为 **DEFERRED**。旧库不属于 v2
 部署、回滚或 reconciliation 范围。
 
 真实 API token 不写进回答或仓库，只通过 Cloudflare/GitHub Secrets 配置。
@@ -407,8 +420,10 @@ Production 部署前仍必须完成：
    `failed_retryable` 自动恢复，还必须先补齐自动重试 dispatcher。
 6. production Parser/ML service URL、服务间认证和最小权限调用身份已配置；
    仍需完成 production smoke test、失败路径验证、监控和回滚验收。
-7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
-   不从旧 D1 或 staging D1 复制未经审核的运行数据。
+7. 通过受 Access 保护的 production Operations API 完成一条经过明确审核的
+   Company -> Company Work Mode -> Position -> Catalog Revision 最小写入链路，
+   并核对读取结果和 `audit_event`。六个现有 CSV 的初始批量导入保持
+   **DEFERRED**；不从旧 D1 或 staging D1 复制未经审核数据。
 8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
    凭据使用；production 应创建或轮换为独立凭据。
 

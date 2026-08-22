@@ -406,3 +406,26 @@ Recruiting Operator
 
 在此阶段之前，内部管理页面和广泛业务用户接入保持延期；该延期不阻止隔离的
 production D1、R2、Queues、Workers 和迁移审批基础设施继续建设。
+## 16. Production Reference/Catalog 初始批量导入（DEFERRED）
+
+状态：**DEFERRED**。
+
+六个现有 CSV 的初始批量导入暂不进入当前 production enablement 范围。当前门槛只要求
+通过受 Cloudflare Access 保护的 Operations API 完成一条经过明确审核的
+`Company -> Company Work Mode -> Position -> Catalog Revision` 最小写入验收，
+并验证读取结果、D1 数量和 `audit_event` actor provenance。
+
+未来恢复批量导入时必须满足：
+
+1. 在写入前验证 CSV header、必填字段、枚举值、引用关系和重复键。
+2. 提供不写库的 dry-run 报告。
+3. 按 Reference -> Company -> Company Work Mode -> Position -> Catalog Revision
+   的依赖顺序执行。
+4. 逐条调用 Operations API，不得直接写 production D1。
+5. 为每行生成确定性幂等键，使安全重跑不会重复创建数据。
+6. 支持 checkpoint/resume，避免中断后从头盲目重放。
+7. 输出逐行成功、跳过、冲突和失败结果，并保留真实 actor provenance。
+8. 明确定义重复项、已存在记录和输入冲突的处理策略。
+9. 先在 staging 用脱敏样本验收，再经过 production Environment 审批运行。
+
+该延期不授权复制 staging 或旧 D1 的运行数据，也不阻塞单条 Operations API 业务写入。

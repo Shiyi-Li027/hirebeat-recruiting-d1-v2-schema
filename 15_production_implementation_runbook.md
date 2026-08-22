@@ -357,8 +357,14 @@ The following items remain required before production enablement:
   result-reporting path has passed a real Google Form Catalog Sync in staging.
   Add an automatic retry dispatcher before relying on `failed_retryable`
   recovery in production.
-- Import an explicitly reviewed production Reference/Catalog seed instead of
-  copying unreviewed staging runtime data.
+- Complete one explicitly reviewed minimum Company -> Company Work Mode ->
+  Position -> Catalog Revision chain through the Access-protected Operations API,
+  then verify Catalog reads, D1 counts and `audit_event` provenance.
+- Initial bulk Reference/Catalog CSV loading, including the six existing source
+  CSVs, is explicitly **DEFERRED** and does not block this minimum acceptance.
+- Any future bulk importer must call the Operations API row by row with dry-run,
+  dependency ordering, deterministic idempotency keys, checkpoint/resume and
+  per-row reporting; it must never become a direct production D1 writer.
 - Rotate or replace every credential that has appeared in an attachment,
   screenshot, terminal transcript or chat record.
 

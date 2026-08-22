@@ -113,6 +113,14 @@ Rows that contain `is_active` default to active unless the authoring request
 explicitly supplies `false` or `0`. A Position with a ready JD defaults to
 `active`; a Position without a ready JD defaults to `draft`.
 
+Initial bulk Reference/Catalog CSV loading, including the six current source
+CSVs, is explicitly **DEFERRED** and is not a gate for the current minimum
+production write acceptance. The current acceptance scope is one explicitly
+reviewed Company -> Company Work Mode -> Position -> Catalog Revision chain
+through the Access-protected Operations API, followed by read and audit
+verification. Any future bulk importer must remain an Operations API client and
+must not write directly to production D1.
+
 ## Core design principles / 核心原则
 
 - All table and column names use `lower_snake_case`.
