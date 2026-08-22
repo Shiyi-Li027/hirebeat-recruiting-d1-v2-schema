@@ -47,7 +47,6 @@ R2_BINDING = "hirebeat_hr_raw_resumes_pdf_r2_v1"
 
 FORBIDDEN_TEXT = (
     'DEPLOYMENT_STAGE = "staging"',
-    'workers_dev = true',
     "ENABLE_STAGING_FAULT_INJECTION",
     "hirebeat_recruiting_d1_v2\"",
     "6c4275ca-faf3-4cba-867c-8ce807c30fc6",
@@ -156,7 +155,7 @@ for config_name in ("ingress", "orchestrator", "operations"):
     require_equal(
         f"{config_name}.workers_dev",
         data.get("workers_dev"),
-        False,
+        config_name == "operations",
     )
 
     variables = data.get("vars")
@@ -302,5 +301,5 @@ print(f"Validated templates: {len(CONFIGS)}")
 print("Production D1 isolation: PASS")
 print("Production R2 isolation: PASS")
 print("Production Queue/Workflow isolation: PASS")
-print("workers.dev disabled: PASS")
+print("workers.dev exposure policy: PASS")
 print("Staging fault injection absent: PASS")

@@ -1,10 +1,11 @@
 name = "hirebeat-operations-api-prod-v1"
 main = "src/index.ts"
 compatibility_date = "2026-08-18"
-workers_dev = false
+workers_dev = true
 preview_urls = false
 
-# Add a reviewed company-owned production custom-domain route before deployment.
+# Temporary no-domain route: protect this Worker's workers.dev URL with
+# Cloudflare Access. Replace it with a reviewed custom domain when available.
 
 [[d1_databases]]
 binding = "DB"
