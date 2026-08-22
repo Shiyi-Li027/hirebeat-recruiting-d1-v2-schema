@@ -1,0 +1,331 @@
+name: Smoke test production Parser and ML
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type SMOKE PRODUCTION RUNTIME to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hirebeat-production-runtime-smoke
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate production runtime smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Require main branch and explicit confirmation
+        env:
+          SMOKE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production runtime smoke testing is restricted to main."
+            exit 1
+          fi
+
+          if [[ "$SMOKE_CONFIRMATION" != "SMOKE PRODUCTION RUNTIME" ]]; then
+            echo "Production runtime smoke confirmation text did not match."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository validation
+        run: npm test
+
+      - name: Validate production configuration isolation
+        run: npm run production:config:validate
+
+  runtime-smoke:
+    name: Smoke test production Parser and ML services
+    needs: preflight
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate protected production runtime configuration
+        env:
+          PRODUCTION_PARSER_SERVICE_URL: ${{ vars.PRODUCTION_PARSER_SERVICE_URL }}
+          PRODUCTION_ML_SERVICE_URL: ${{ vars.PRODUCTION_ML_SERVICE_URL }}
+          CLOUD_RUN_INVOKER_JSON: ${{ secrets.CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON }}
+          PARSER_SERVICE_AUTH_TOKEN_VALUE: ${{ secrets.PARSER_SERVICE_AUTH_TOKEN }}
+          ML_SERVICE_AUTH_TOKEN_VALUE: ${{ secrets.ML_SERVICE_AUTH_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from urllib.parse import urlparse
+
+          urls = {
+              "Parser": os.environ.get("PRODUCTION_PARSER_SERVICE_URL", "").strip(),
+              "ML": os.environ.get("PRODUCTION_ML_SERVICE_URL", "").strip(),
+          }
+
+          for service, value in urls.items():
+              if not value:
+                  raise SystemExit(
+                      f"Missing production Environment variable: "
+                      f"PRODUCTION_{service.upper()}_SERVICE_URL"
+                  )
+
+              parsed = urlparse(value)
+              if (
+                  parsed.scheme != "https"
+                  or not parsed.hostname
+                  or not parsed.hostname.endswith(".run.app")
+                  or parsed.path not in ("", "/")
+                  or "stg" in parsed.hostname
+              ):
+                  raise SystemExit(
+                      f"Invalid or non-production {service} service URL"
+                  )
+
+          raw_identity = os.environ.get("CLOUD_RUN_INVOKER_JSON", "")
+          if not raw_identity:
+              raise SystemExit(
+                  "Missing production Environment secret: "
+                  "CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON"
+              )
+
+          try:
+              identity = json.loads(raw_identity)
+          except json.JSONDecodeError as error:
+              raise SystemExit(
+                  "Invalid Cloud Run invoker service-account JSON"
+              ) from error
+
+          expected_project = "hirebeat-recruiting-prod-027"
+          expected_email = (
+              "hb-cloudflare-invoker-prod@"
+              "hirebeat-recruiting-prod-027.iam.gserviceaccount.com"
+          )
+
+          if identity.get("type") != "service_account":
+              raise SystemExit("Cloud Run invoker JSON has the wrong type")
+
+          if identity.get("project_id") != expected_project:
+              raise SystemExit("Cloud Run invoker JSON has the wrong project")
+
+          if identity.get("client_email") != expected_email:
+              raise SystemExit("Cloud Run invoker JSON has the wrong identity")
+
+          for secret_name in (
+              "PARSER_SERVICE_AUTH_TOKEN_VALUE",
+              "ML_SERVICE_AUTH_TOKEN_VALUE",
+          ):
+              if not os.environ.get(secret_name, "").strip():
+                  raise SystemExit(
+                      f"Missing protected production secret: {secret_name}"
+                  )
+
+          print("Protected production runtime configuration: PASS")
+          PY
+
+      - name: Authenticate for production Parser
+        id: parser-auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON }}
+          token_format: id_token
+          id_token_audience: ${{ vars.PRODUCTION_PARSER_SERVICE_URL }}
+          create_credentials_file: false
+
+      - name: Smoke test production Parser
+        env:
+          PARSER_SERVICE_URL: ${{ vars.PRODUCTION_PARSER_SERVICE_URL }}
+          CLOUD_RUN_ID_TOKEN: ${{ steps.parser-auth.outputs.id_token }}
+          PARSER_SERVICE_AUTH_TOKEN: ${{ secrets.PARSER_SERVICE_AUTH_TOKEN }}
+        run: |
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          python3 - "$TMP_DIR/smoke.pdf" <<'PY'
+          import sys
+          from pathlib import Path
+
+          target = Path(sys.argv[1])
+          objects = [
+              b"<< /Type /Catalog /Pages 2 0 R >>",
+              b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+              (
+                  b"<< /Type /Page /Parent 2 0 R "
+                  b"/MediaBox [0 0 612 792] "
+                  b"/Resources << /Font << /F1 5 0 R >> >> "
+                  b"/Contents 4 0 R >>"
+              ),
+              (
+                  b"<< /Length 91 >>\nstream\n"
+                  b"BT /F1 18 Tf 72 700 Td "
+                  b"(HireBeat production parser smoke test.) Tj ET\n"
+                  b"endstream"
+              ),
+              b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+          ]
+
+          pdf = bytearray(b"%PDF-1.4\n")
+          offsets = [0]
+
+          for index, obj in enumerate(objects, start=1):
+              offsets.append(len(pdf))
+              pdf.extend(f"{index} 0 obj\n".encode())
+              pdf.extend(obj)
+              pdf.extend(b"\nendobj\n")
+
+          xref = len(pdf)
+          pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+          pdf.extend(b"0000000000 65535 f \n")
+
+          for offset in offsets[1:]:
+              pdf.extend(f"{offset:010d} 00000 n \n".encode())
+
+          pdf.extend(
+              (
+                  f"trailer\n<< /Size {len(objects) + 1} "
+                  f"/Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+              ).encode()
+          )
+
+          target.write_bytes(pdf)
+          PY
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            -H "Authorization: Bearer $PARSER_SERVICE_AUTH_TOKEN" \
+            -H "x-serverless-authorization: Bearer $CLOUD_RUN_ID_TOKEN" \
+            "$PARSER_SERVICE_URL/ready" \
+            > "$TMP_DIR/parser-ready.json"
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            -H "Authorization: Bearer $PARSER_SERVICE_AUTH_TOKEN" \
+            -H "x-serverless-authorization: Bearer $CLOUD_RUN_ID_TOKEN" \
+            -F "file=@$TMP_DIR/smoke.pdf;type=application/pdf" \
+            "$PARSER_SERVICE_URL/parse-pdf" \
+            > "$TMP_DIR/parser-result.json"
+
+          python3 - \
+            "$TMP_DIR/parser-ready.json" \
+            "$TMP_DIR/parser-result.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          ready = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          result = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+
+          if not isinstance(ready, dict):
+              raise SystemExit("Parser readiness response is not an object")
+
+          text = result.get("text", "")
+          if "HireBeat production parser smoke test" not in text:
+              raise SystemExit("Parser did not extract the expected PDF text")
+
+          if int(result.get("page_count", 0)) != 1:
+              raise SystemExit("Parser returned an unexpected page count")
+
+          if not result.get("parser_name"):
+              raise SystemExit("Parser response is missing parser_name")
+
+          print("Production Parser smoke test: PASS")
+          PY
+
+      - name: Authenticate for production ML
+        id: ml-auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.CLOUD_RUN_INVOKER_SERVICE_ACCOUNT_JSON }}
+          token_format: id_token
+          id_token_audience: ${{ vars.PRODUCTION_ML_SERVICE_URL }}
+          create_credentials_file: false
+
+      - name: Smoke test production ML
+        env:
+          ML_SERVICE_URL: ${{ vars.PRODUCTION_ML_SERVICE_URL }}
+          CLOUD_RUN_ID_TOKEN: ${{ steps.ml-auth.outputs.id_token }}
+          ML_SERVICE_AUTH_TOKEN: ${{ secrets.ML_SERVICE_AUTH_TOKEN }}
+        run: |
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            -H "Authorization: Bearer $ML_SERVICE_AUTH_TOKEN" \
+            -H "x-serverless-authorization: Bearer $CLOUD_RUN_ID_TOKEN" \
+            "$ML_SERVICE_URL/ready" \
+            > "$TMP_DIR/ml-ready.json"
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            -H "Authorization: Bearer $ML_SERVICE_AUTH_TOKEN" \
+            -H "x-serverless-authorization: Bearer $CLOUD_RUN_ID_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "resume_text": "Recruiting operations coordinator with campaign, social media, analytics, and stakeholder communication experience.",
+              "position_jd": "Influencer Marketing Coordinator responsible for campaign coordination, creator communication, reporting, and marketing operations."
+            }' \
+            "$ML_SERVICE_URL/v1/similarity" \
+            > "$TMP_DIR/ml-result.json"
+
+          python3 - \
+            "$TMP_DIR/ml-ready.json" \
+            "$TMP_DIR/ml-result.json" <<'PY'
+          import json
+          import math
+          import sys
+          from pathlib import Path
+
+          ready = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          result = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+
+          if not isinstance(ready, dict):
+              raise SystemExit("ML readiness response is not an object")
+
+          score = result.get("match_score")
+          if not isinstance(score, (int, float)) or not math.isfinite(score):
+              raise SystemExit("ML response has an invalid match_score")
+
+          if score < -1 or score > 1:
+              raise SystemExit("ML match_score is outside the expected range")
+
+          if not result.get("model_name"):
+              raise SystemExit("ML response is missing model_name")
+
+          if not result.get("similarity_metric"):
+              raise SystemExit("ML response is missing similarity_metric")
+
+          print("Production ML smoke test: PASS")
+          PY
+
+      - name: Confirm smoke-test scope
+        run: |
+          echo "Production runtime smoke testing completed."
+          echo "No D1 write commands were executed."
+          echo "No Queue or Workflow messages were submitted."
+          echo "No production resume or applicant data was used."
