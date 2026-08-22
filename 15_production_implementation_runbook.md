@@ -404,13 +404,34 @@ duplicate business rows or duplicate audit events.
 - Broad business-user access, the internal Operations Console, and route-level
   RBAC remain deferred as documented in the future-optimization plan.
 
-## 13. Production deployment prerequisites
+## 13. Production Parser and ML runtime smoke evidence
+
+Status: **PASS for the minimum non-mutating production runtime smoke scope**.
+
+- Protected GitHub Actions workflow `Smoke test production Parser and ML`, run
+  `#1`, was manually dispatched from `main` at commit `7e26c91`.
+- The protected production runtime configuration validation passed.
+- The authenticated production Resume Parser smoke request passed.
+- The authenticated production ML smoke request passed and satisfied the
+  workflow's response-contract checks.
+- No D1 write commands were executed.
+- No Queue or Workflow messages were submitted.
+- No production resume or applicant data was used.
+
+This evidence confirms the configured private production service URLs,
+authentication path, reachability and minimum response contracts. It does not
+replace provider-path end-to-end acceptance, failure-path monitoring, alerting
+or rollback validation.
+
+## 14. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
 - Maintain the already isolated production D1, R2, Queues/DLQ, Workers,
   Workflows and Operations API without rebinding any staging resource.
-- Complete production smoke tests, failure monitoring and rollback validation.
+- The minimum non-mutating production Parser/ML runtime smoke test has passed.
+  Complete provider-path end-to-end acceptance, failure-path monitoring,
+  alerting and rollback validation before enabling production business traffic.
 - The administrator-only Operations API currently uses an Access-protected
   `workers.dev` route as the reviewed temporary no-domain solution. Move it to
   a company-owned custom domain when available, then revalidate its Access

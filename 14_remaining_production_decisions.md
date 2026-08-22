@@ -383,10 +383,21 @@ production Operations API 的管理员受限部署与 Access 验收也已完成�
 - 无痕窗口中的未认证访问会跳转到 Cloudflare 登录，未授权邮箱拒绝测试也已通过。
 - production Catalog 仍为空，未启用 provider channel、广泛业务用户访问或真实业务流量。
 
+production Parser/ML 最小 runtime smoke 也已完成并通过验证：
+
+- 受保护的 GitHub Actions `Smoke test production Parser and ML` run `#1`
+  从 `main` commit `7e26c91` 手工启动并成功完成。
+- protected production runtime configuration、production Resume Parser 和
+  production ML 三项检查均返回 `PASS`。
+- 测试只使用合成请求，不使用 production resume 或 applicant 数据；未执行 D1
+  写入，也未向 Queue 或 Workflow 投递消息。
+- 该结果确认 production 私有服务的认证、可达性和最小响应契约；不等于完整
+  provider-path 端到端验收、失败路径监控、告警或回滚演练已经完成。
+
 以上确认初始 production D1 Schema migration、Submission Ingress 和 ETL
-Orchestrator 首次部署，以及管理员受限的 Operations API 部署与 Access 验收。
-它不代表 company-owned custom domain、provider channel、广泛业务用户访问或
-真实业务流量已经启用。
+Orchestrator 首次部署、管理员受限的 Operations API 部署与 Access 验收，以及
+production Parser/ML 最小非写入 runtime smoke。它不代表 company-owned custom
+domain、provider channel、广泛业务用户访问或真实业务流量已经启用。
 
 Production 部署前仍必须完成：
 
@@ -405,8 +416,9 @@ Production 部署前仍必须完成：
 5. `catalog_sync_run` / `catalog_sync_target_run` 结果报告已经在 staging
    通过真实 Google Form Catalog Sync 验证；如 production 需要依赖
    `failed_retryable` 自动恢复，还必须先补齐自动重试 dispatcher。
-6. production Parser/ML service URL、服务间认证和最小权限调用身份已配置；
-   仍需完成 production smoke test、失败路径验证、监控和回滚验收。
+6. production Parser/ML service URL、服务间认证和最小权限调用身份已配置，且
+   最小非写入 runtime smoke 已通过；仍需完成 provider-path 端到端验收、
+   失败路径验证、持续监控、告警和回滚验收。
 7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
    不从旧 D1 或 staging D1 复制未经审核的运行数据。
 8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
