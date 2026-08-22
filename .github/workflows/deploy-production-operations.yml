@@ -1,0 +1,246 @@
+name: Deploy production Operations API
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: Select bootstrap for the first deployment, then access-protected after Access is configured
+        required: true
+        type: choice
+        default: bootstrap
+        options:
+          - bootstrap
+          - access-protected
+      confirmation:
+        description: Type DEPLOY PRODUCTION OPERATIONS to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hirebeat-production-operations-api
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate production Operations deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Require main branch and explicit confirmation
+        env:
+          DEPLOYMENT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production deployment is restricted to main."
+            exit 1
+          fi
+
+          if [[ "$DEPLOYMENT_CONFIRMATION" != "DEPLOY PRODUCTION OPERATIONS" ]]; then
+            echo "Production confirmation text did not match."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repository validation
+        run: npm test
+
+      - name: Validate production configuration isolation
+        run: npm run production:config:validate
+
+  deploy-production-operations:
+    name: Deploy production Operations API
+    needs: preflight
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate protected production configuration
+        env:
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+          PRODUCTION_ACCESS_TEAM_DOMAIN: ${{ vars.PRODUCTION_ACCESS_TEAM_DOMAIN }}
+          PRODUCTION_ACCESS_AUD: ${{ vars.PRODUCTION_ACCESS_AUD }}
+          CLOUDFLARE_ACCOUNT_ID_VALUE: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WORKERS_API_TOKEN_VALUE: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from urllib.parse import urlparse
+
+          mode = os.environ["DEPLOYMENT_MODE"].strip()
+          database_id = os.environ["PRODUCTION_D1_DATABASE_ID"].strip()
+          team_domain = os.environ["PRODUCTION_ACCESS_TEAM_DOMAIN"].strip()
+          access_aud = os.environ["PRODUCTION_ACCESS_AUD"].strip()
+          account_id = os.environ["CLOUDFLARE_ACCOUNT_ID_VALUE"].strip()
+          api_token = os.environ["CLOUDFLARE_WORKERS_API_TOKEN_VALUE"].strip()
+
+          if mode not in {"bootstrap", "access-protected"}:
+              raise SystemExit("Invalid production Operations deployment mode")
+
+          uuid_pattern = (
+              r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+              r"[0-9a-f]{4}-[0-9a-f]{12}"
+          )
+          if not re.fullmatch(uuid_pattern, database_id):
+              raise SystemExit("Invalid production D1 database ID")
+
+          if not re.fullmatch(r"[0-9a-f]{32}", account_id):
+              raise SystemExit("Invalid Cloudflare account ID")
+
+          if not api_token:
+              raise SystemExit(
+                  "Missing production Environment secret: "
+                  "CLOUDFLARE_WORKERS_API_TOKEN"
+              )
+
+          parsed = urlparse(team_domain)
+          if (
+              parsed.scheme != "https"
+              or not parsed.netloc.endswith(".cloudflareaccess.com")
+              or parsed.path not in {"", "/"}
+              or parsed.params
+              or parsed.query
+              or parsed.fragment
+          ):
+              raise SystemExit(
+                  "PRODUCTION_ACCESS_TEAM_DOMAIN must be an HTTPS "
+                  "cloudflareaccess.com team domain"
+              )
+
+          if mode == "access-protected":
+              if not re.fullmatch(r"[0-9a-f]{64}", access_aud):
+                  raise SystemExit(
+                      "PRODUCTION_ACCESS_AUD must be the 64-character "
+                      "Access application audience in access-protected mode"
+                  )
+
+          print("Protected production configuration validation: PASS")
+          print(f"Deployment mode: {mode}")
+          PY
+
+      - name: Render reviewed production Operations configuration
+        env:
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+          PRODUCTION_ACCESS_TEAM_DOMAIN: ${{ vars.PRODUCTION_ACCESS_TEAM_DOMAIN }}
+          PRODUCTION_ACCESS_AUD: ${{ vars.PRODUCTION_ACCESS_AUD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          source = Path(
+              "workers/operations-api/"
+              "wrangler.production.example.toml"
+          )
+          target = Path(
+              "workers/operations-api/"
+              "wrangler.production.toml"
+          )
+
+          if target.exists():
+              raise SystemExit(
+                  f"Refusing to overwrite generated configuration: {target}"
+              )
+
+          mode = os.environ["DEPLOYMENT_MODE"].strip()
+          database_id = os.environ["PRODUCTION_D1_DATABASE_ID"].strip()
+          team_domain = os.environ["PRODUCTION_ACCESS_TEAM_DOMAIN"].strip()
+          configured_aud = os.environ["PRODUCTION_ACCESS_AUD"].strip()
+
+          if mode == "bootstrap":
+              access_aud = "0" * 64
+          elif mode == "access-protected":
+              access_aud = configured_aud
+          else:
+              raise SystemExit("Invalid deployment mode")
+
+          replacements = {
+              "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID": database_id,
+              "REPLACE_WITH_PRODUCTION_ACCESS_TEAM_DOMAIN": team_domain,
+              "REPLACE_WITH_PRODUCTION_ACCESS_AUD": access_aud,
+          }
+
+          text = source.read_text(encoding="utf-8")
+
+          for placeholder, value in replacements.items():
+              if text.count(placeholder) != 1:
+                  raise SystemExit(
+                      f"Unexpected placeholder count for {placeholder}"
+                  )
+              text = text.replace(placeholder, value, 1)
+
+          if "REPLACE_WITH_" in text:
+              raise SystemExit(
+                  "Generated production configuration still has placeholders"
+              )
+
+          target.write_text(text, encoding="utf-8")
+
+          data = tomllib.loads(text)
+          if data.get("workers_dev") is not True:
+              raise SystemExit(
+                  "Production Operations workers.dev route must be enabled"
+              )
+          if data.get("preview_urls") is not False:
+              raise SystemExit(
+                  "Production Operations preview URLs must remain disabled"
+              )
+          if data.get("vars", {}).get("DEPLOYMENT_STAGE") != "production":
+              raise SystemExit("Invalid Operations deployment stage")
+
+          print("Production Operations configuration rendering: PASS")
+          print(f"Deployment mode: {mode}")
+          PY
+
+      - name: Validate production Operations Worker build
+        run: |
+          npx wrangler deploy \
+            --dry-run \
+            --config workers/operations-api/wrangler.production.toml
+
+      - name: Deploy production Operations API
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          npx wrangler deploy \
+            --strict \
+            --config workers/operations-api/wrangler.production.toml \
+            --message "Production Operations API deployment from ${GITHUB_SHA}"
+
+      - name: Remove generated production configuration
+        if: always()
+        run: |
+          rm -f workers/operations-api/wrangler.production.toml
