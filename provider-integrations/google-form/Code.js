@@ -519,7 +519,15 @@ function onHireBeatFormSubmit(event) {
     {
       method: "post",
       contentType: "application/json",
-      headers: { Authorization: `Bearer ${hireBeatRequiredProperty_(properties.ingressToken)}` },
+      headers: {
+        Authorization: `Bearer ${hireBeatRequiredProperty_(properties.ingressToken)}`,
+        "CF-Access-Client-Id": hireBeatRequiredProperty_(
+          properties.accessClientId
+        ),
+        "CF-Access-Client-Secret": hireBeatRequiredProperty_(
+          properties.accessClientSecret
+        ),
+      },
       payload: JSON.stringify({
         sourceRecordId,
         sourceEventKey: `google-form-submit:${formId}:${responseId}`,

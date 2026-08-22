@@ -155,7 +155,7 @@ for config_name in ("ingress", "orchestrator", "operations"):
     require_equal(
         f"{config_name}.workers_dev",
         data.get("workers_dev"),
-        config_name == "operations",
+        config_name in ("ingress", "operations"),
     )
 
     variables = data.get("vars")
