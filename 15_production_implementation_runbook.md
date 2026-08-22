@@ -162,14 +162,22 @@ Every mutation requires a caller-supplied `idempotency_key`. Migration `0008` en
 
 Place environment-specific URLs and Access identifiers in the deployment environment, not in source defaults.
 
-The initial staging Cloudflare account has no managed domain. Staging Ingress
-and Operations therefore use stable `workers.dev` targets with preview URLs
-disabled. Every Ingress mutation still requires `INGRESS_INTERNAL_AUTH_TOKEN`.
-Every Operations route except `/health` still requires a verified Cloudflare
-Access JWT, and Access must be enabled on the Operations `workers.dev` route
-before any authoring call is accepted. This is a staging-only transport
-decision: production keeps `workers_dev = false` and uses reviewed
-company-owned custom domains. Orchestrator has no public route.
+The Cloudflare account currently has no managed domain. Staging Ingress and
+Operations use stable `workers.dev` targets with preview URLs disabled.
+Production Operations temporarily also uses its stable `workers.dev` route
+with preview URLs disabled and Cloudflare Access Worker-level protection over
+all traffic. Every Ingress mutation still requires the provider-specific HMAC
+header, while every Operations route except `/health` requires a valid
+Cloudflare Access JWT. `workers.dev` is only the transport endpoint; it is not
+an authorization boundary and does not weaken either application-level
+verification path. Production Ingress and ETL Orchestrator remain
+`workers_dev = false`; Orchestrator has no public route.
+
+The administrator-only production `workers.dev` route is a reviewed bootstrap
+transport. When a company-owned managed domain is available, move Operations
+to the reviewed custom domain and revalidate the Access destination, AUD,
+exact-email Allow policy and unauthorized-user denial before enabling business
+traffic.
 
 ## 5. Required Secrets
 
@@ -297,22 +305,51 @@ the production Operations API.
   configured.
 - Production D1 still reports 14 applied migrations, 0 foreign-key violations
   and no representative runtime, PII, audit or Outbox records after deployment.
-- The production Operations API, custom-domain routes and provider business
-  channel remain excluded from this deployment.
+- The production Operations API was excluded from this Worker run and was
+  deployed and Access-protected separately afterward. Custom-domain routing
+  and the provider business channel remain excluded.
 
-## 11. Production deployment prerequisites
+## 11. Initial production Operations API deployment evidence
+
+Status: **PASS for the administrator-only Operations API deployment and
+Cloudflare Access acceptance**. This does not enable the production provider
+channel, broad business-user access or production business traffic.
+
+- GitHub Actions workflow `Deploy production Operations API`, run `#2`, was
+  manually dispatched from `main` at commit `7cbb3c3`.
+- The preflight validation job passed before the deployment job entered the
+  protected `production` Environment.
+- The deployment required and received explicit Environment reviewer approval.
+- `hirebeat-operations-api-prod-v1` was deployed to its temporary production
+  `workers.dev` URL; preview URLs remain disabled.
+- Cloudflare Access Worker-level protection applies to all production URL
+  traffic. The `Production Operations Admin` Allow policy contains only the
+  exact administrator email `shiyilidorothy@gmail.com`.
+- The production Access AUD is configured in the protected GitHub Environment;
+  its full value is intentionally omitted from documentation.
+- Authorized acceptance checks passed for `/health`, `/v1/reference/types`,
+  `/v1/catalog/options` and `/v1/system/time-policy`. The health response
+  reported `stage: production`; the Catalog response remained empty by design;
+  and the time-policy response reported configuration release version 3, UTC
+  storage and `America/New_York` business/display time.
+- The root path returned `{"error":"not_found"}`, which is expected because the
+  API defines no root route.
+- An unauthenticated incognito request was redirected to Cloudflare login, and
+  an unauthorized-email denial test passed.
+
+## 12. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
-- The isolated production D1, R2, Queue, DLQ, Resume Parser, ML service,
-  Submission Ingress, ETL Orchestrator and Workflows are deployed. Deploy and
-  protect the isolated production Operations API.
-- Complete production smoke testing for Parser/ML invocation, Queue and
-  Workflow processing, failure handling, monitoring and rollback.
-- Configure company-owned production custom domains and separate Cloudflare
-  Access applications, AUD values and authorization policies.
-- Create a protected GitHub `production` Environment with manual approval and
-  production-only Cloudflare credentials.
+- Maintain the already isolated production D1, R2, Queues/DLQ, Workers,
+  Workflows and Operations API without rebinding any staging resource.
+- Complete production smoke tests, failure monitoring and rollback validation.
+- The administrator-only Operations API currently uses an Access-protected
+  `workers.dev` route as the reviewed temporary no-domain solution. Move it to
+  a company-owned custom domain when available, then revalidate its Access
+  destination, AUD, exact-email Allow policy and unauthorized-user denial.
+- Continue requiring the protected GitHub production Environment and reviewer
+  approval for every later production migration and deployment.
 - Configure production-only Google Form provider identifiers, Ingress
   credentials and Cloudflare Access service credentials; do not reuse staging
   tokens or Secrets.
