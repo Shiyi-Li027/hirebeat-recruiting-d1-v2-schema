@@ -367,19 +367,39 @@ staging 通道，也不阻塞 production 基础设施准备。
 - 部署后 production D1 仍保留 14 个 migrations、0 个外键违规，代表性运行、
   PII、审计和 Outbox 表仍为空。
 
-以上确认初始 production D1 Schema migration，以及 Submission Ingress 和 ETL
-Orchestrator 的首次部署。它不代表 production Operations API、custom domains、
-Cloudflare Access、provider channel 或真实业务流量已经启用。
+production Operations API 的管理员受限部署与 Access 验收也已完成：
+
+- 受保护的 GitHub Actions `Deploy production Operations API` run `#2` 从
+  `main` commit `7cbb3c3` 手工启动，并在 `production` Environment 人工审批后成功。
+- `hirebeat-operations-api-prod-v1` 已部署；由于当前 Cloudflare account 没有
+  managed domain，暂时使用受 Cloudflare Access 保护的 `workers.dev` production
+  URL，`preview_urls` 保持关闭。
+- Worker 级 Access 对 production URL 的全部流量生效；`Production Operations
+  Admin` 仅允许精确邮箱 `shiyilidorothy@gmail.com`。production Access AUD 已写入
+  受保护的部署配置。
+- 已通过授权访问 `/health`、`/v1/reference/types`、`/v1/catalog/options` 和
+  `/v1/system/time-policy`；根路径返回 `{"error":"not_found"}` 属于未定义根路由的
+  预期行为。
+- 无痕窗口中的未认证访问会跳转到 Cloudflare 登录，未授权邮箱拒绝测试也已通过。
+- production Catalog 仍为空，未启用 provider channel、广泛业务用户访问或真实业务流量。
+
+以上确认初始 production D1 Schema migration、Submission Ingress 和 ETL
+Orchestrator 首次部署，以及管理员受限的 Operations API 部署与 Access 验收。
+它不代表 company-owned custom domain、provider channel、广泛业务用户访问或
+真实业务流量已经启用。
 
 Production 部署前仍必须完成：
 
 1. 独立的 production D1、R2、Queue、DLQ、Resume Parser、ML 服务、
-   Submission Ingress、ETL Orchestrator 和 Workflows 已创建或部署；仍需部署并
-   保护 production Operations API，且不得重新绑定或复用 staging 资源。
-2. 配置 production 专用 custom domains、Cloudflare Access 应用与策略、
-   环境变量和 Secrets。
-3. 创建受保护的 GitHub `production` Environment，并启用人工 approval；
-   production migration 和部署必须经过该 Environment。
+   Submission Ingress、ETL Orchestrator、Workflows 和 Operations API 已创建或
+   部署；继续保持与 staging 资源完全隔离。
+2. 当前管理员受限的 Operations API 使用受 Access 保护的 `workers.dev` URL，属于
+   已审核的临时无域名方案。获得 company-owned managed domain 后，迁移到正式
+   custom domain，并重新验证 Access destination、AUD、精确邮箱 Allow 和未授权拒绝。
+   在应用级 RBAC 和内部 Operations Console 完成前，不得向广泛业务用户开放。
+3. 受保护的 GitHub `production` Environment 已创建并启用人工 approval；
+   后续 production migration 和部署仍必须经过该 Environment，并只使用
+   production 专用凭据。
 4. 为 production Google Form bridge 配置 production 专用的 provider 标识和
    凭据；不得复用 staging token、service token 或其他 Secrets。
 5. `catalog_sync_run` / `catalog_sync_target_run` 结果报告已经在 staging
