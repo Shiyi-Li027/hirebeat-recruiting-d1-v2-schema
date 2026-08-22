@@ -406,3 +406,37 @@ Recruiting Operator
 
 在此阶段之前，内部管理页面和广泛业务用户接入保持延期；该延期不阻止隔离的
 production D1、R2、Queues、Workers 和迁移审批基础设施继续建设。
+
+## 16. Initial bulk Reference / Catalog CSV import（延期）
+
+初始 Reference/Catalog CSV 批量导入当前明确标记为 **deferred**。production
+最小 Catalog/Operations 单条写入与幂等验收已经通过，因此本事项不阻塞当前
+production 基础设施和最小业务链路验收。
+
+在专用批量导入能力实现之前：
+
+- 日常 Company、Company Work Mode、Position、Catalog Revision 等业务变更应
+  逐条通过受 Cloudflare Access 保护的 Operations API 提交；
+- 不得为了提高导入速度而绕过 Operations API 直接写 production D1；
+- 不得把 staging、历史测试环境或来源不明的运行数据整体复制到 production；
+- 每次写入仍须使用唯一且可追踪的 idempotency key，并保留 `audit_event` actor
+  provenance。
+
+如果后续确实需要导入一整个 CSV，应实现经过评审的专用 importer，并至少满足：
+
+1. 提供 dry-run，只执行字段、枚举、外键、重复项和业务规则验证，不写数据库。
+2. 将 CSV 规范化为 Operations API 已支持的单条命令，逐条调用 API，不另建第二
+   条直接写库通道。
+3. 为每一行生成稳定、可重复计算的 idempotency key，使中断后可以安全重跑。
+4. 输出逐行成功、复用、失败和跳过结果，并支持从检查点恢复。
+5. 对无效行默认拒绝，不以空值、猜测值或 staging 值静默补齐 production 数据。
+6. 每个成功业务变更都必须产生正常的 `audit_event`，并保留 member 或 service
+   actor 身份。
+7. 先在 staging 使用脱敏样本完成 allow/deny、重试、部分失败和审计验收，再申请
+   production Environment 审批运行。
+8. 导入后核对 Catalog snapshot、表记录数、审计事件数和重复执行结果，并形成可
+   追踪的验收证据。
+
+未来内部 Operations Console 和 route-level RBAC 完成后，普通业务人员的日常单条
+变更仍应走受控页面和 Operations API；批量 importer 应只开放给经过授权的
+Operations Admin，而不应成为所有业务用户都可使用的通用写入入口。

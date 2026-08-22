@@ -337,7 +337,74 @@ channel, broad business-user access or production business traffic.
 - An unauthenticated incognito request was redirected to Cloudflare login, and
   an unauthorized-email denial test passed.
 
-## 12. Production deployment prerequisites
+## 12. Production Catalog / Operations write acceptance evidence
+
+Status: **PASS for the minimum production Catalog write path**.
+
+The acceptance was performed through the Cloudflare Access-protected production
+Operations API, not by directly inserting rows in D1.
+
+### Accepted business records
+
+- Company: `Nello` (`company.id = 1`).
+- Company Work Mode: `Remote` (`work_mode.id = 3`, code `remote`,
+  `company_work_mode.id = 1`).
+- Position: `Influencer Marketing Coordinator` (`position.id = 1`).
+- Catalog revision: `1` (`catalog_revision.id = 1`).
+- Snapshot SHA-256:
+  `123fe2375d16d0334c12aae4359db9fe3bd30390ecb913f33fb00fd728e2e895`.
+
+After publication, `/v1/catalog/options` returned revision `1` and the expected
+Company, Company Work Mode, and Position. Production D1 inspection independently
+confirmed the same rows.
+
+### Audit and actor provenance
+
+The four accepted commands produced one `audit_event` each:
+
+- `command.catalog.company.create`;
+- `command.catalog.company_work_mode.create`;
+- `command.catalog.position.create`;
+- `command.catalog.revision.publish`.
+
+Each event retained actor type `member` and actor ID
+`shiyilidorothy@gmail.com`. The correlation/idempotency keys were:
+
+- `prod-acceptance-nello-company-v1`;
+- `prod-acceptance-nello-remote-v1`;
+- `prod-acceptance-nello-position-v1`;
+- `prod-acceptance-nello-revision-v1`.
+
+### Idempotency replay
+
+The exact same JavaScript request sequence was executed a second time. Company,
+Company Work Mode, Position, and Catalog Revision responses all contained
+`idempotent_reuse: true`. The following counts remained unchanged:
+
+- `company = 1`;
+- `company_work_mode = 1`;
+- `position = 1`;
+- `catalog_revision = 1`;
+- one matching `audit_event` for each of the four correlation keys.
+
+This confirms that retrying an already accepted business command does not create
+duplicate business rows or duplicate audit events.
+
+### Access and scope boundaries
+
+- The exact-email production Access user successfully authenticated and used the
+  protected API.
+- A separately tested unauthorized email was denied access.
+- No staging or legacy runtime data was copied into production.
+- This acceptance does not enable Google Form or other production provider
+  traffic.
+- Initial bulk Reference/Catalog CSV import remains deferred.
+- Routine business writes must use the Operations API; direct production D1
+  writes are not an approved operating procedure.
+- Broad business-user access, the internal Operations Console, and route-level
+  RBAC remain deferred as documented in the future-optimization plan.
+
+## 13. Production deployment prerequisites
 
 The following items remain required before production enablement:
 
