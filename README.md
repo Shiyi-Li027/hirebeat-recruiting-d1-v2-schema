@@ -195,6 +195,7 @@ The tree below highlights the maintained entry points and is representative rath
 ├── 18_automatic_recovery_policy.md
 ├── 19_data_change_reaction_policy.md
 ├── 20_provider_native_submission_windows.md
+├── 21_complete_project_handover_runbook.md
 ├── wrangler.toml
 ├── package.json
 ├── DEPLOYMENT_GUIDE.md
@@ -426,6 +427,7 @@ for the proposed access model.
 - [`15_production_implementation_runbook.md`](15_production_implementation_runbook.md): implemented runtime flow, APIs, required bindings/Secrets, validation and deployment gates
 - [`16_runtime_three_way_comparison.md`](16_runtime_three_way_comparison.md): runtime-level differences from the legacy Colab flow and teammate Worker
 - [`20_provider_native_submission_windows.md`](20_provider_native_submission_windows.md): native Google Form/Airtable contracts, secure bridge setup, stale-window behavior, and activation gates
+- [`21_complete_project_handover_runbook.md`](21_complete_project_handover_runbook.md): detailed five-role onboarding and offboarding, cross-platform ownership transfer, credential rotation and recovery, plus Cloudflare Access destination guidance
 - [`test-exports/README.md`](test-exports/README.md): centralized inspection-export directory and PII boundary
 
 ## License
