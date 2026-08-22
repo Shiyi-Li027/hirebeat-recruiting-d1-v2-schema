@@ -412,6 +412,43 @@ Production 部署前仍必须完成：
 8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
    凭据使用；production 应创建或轮换为独立凭据。
 
+## Production 最小 Catalog / Operations 写入验收
+
+状态：**PASS**。已通过受 Cloudflare Access 保护的 production Operations API
+完成最小真实写入链路验收：
+
+- 创建 Company `Nello`；
+- 关联 `work_mode.id = 3`、code `remote`、name `Remote`；
+- 创建 Position `Influencer Marketing Coordinator`；
+- 发布 Catalog revision `1`，snapshot SHA-256 为
+  `123fe2375d16d0334c12aae4359db9fe3bd30390ecb913f33fb00fd728e2e895`；
+- `/v1/catalog/options` 返回上述 revision、Company、Company Work Mode 和
+  Position；
+- production D1 中 `company`、`company_work_mode`、`position`、
+  `catalog_revision` 的记录数均为 `1`；
+- 四个业务命令均写入 `audit_event`，actor 为
+  `member / shiyilidorothy@gmail.com`。
+
+本次验收使用以下 correlation/idempotency keys：
+
+- `prod-acceptance-nello-company-v1`；
+- `prod-acceptance-nello-remote-v1`；
+- `prod-acceptance-nello-position-v1`；
+- `prod-acceptance-nello-revision-v1`。
+
+完全相同的请求第二次执行后，Company、Company Work Mode、Position 和
+Catalog Revision 均返回 `idempotent_reuse: true`；四张业务表的记录数保持为
+`1`，每个 correlation key 对应的审计事件数也保持为 `1`。因此已确认重复提交
+不会产生重复业务记录或重复审计事件。
+
+Access 访问边界也已验收：精确授权邮箱可以登录并调用 Operations API，未授权邮箱
+无法获得访问权限。该验收没有复制 staging 或旧 D1 的运行数据，也没有启用
+production provider traffic。
+
+初始批量 Reference/Catalog CSV 导入明确标记为 **deferred**，不阻塞当前最小
+production 验收。日常 Company、Position、Catalog 等单条业务变更继续通过受
+Access 保护的 Operations API 执行，不允许绕过 API 直接写 production D1。
+
 ## 最终冻结结果
 
 D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发现安全阻断、技术上无法

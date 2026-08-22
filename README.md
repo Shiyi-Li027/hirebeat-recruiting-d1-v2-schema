@@ -415,6 +415,28 @@ to reviewed administrator/operator identities. See
 [`03_future_optimization_recommendations.md`](03_future_optimization_recommendations.md)
 for the proposed access model.
 
+## Production Catalog / Operations write acceptance / 生产 Catalog / Operations 写入验收
+
+The minimum production Catalog write path has passed acceptance through the
+Cloudflare Access-protected Operations API:
+
+- created company `Nello`, linked the active `Remote` work mode, and created
+  position `Influencer Marketing Coordinator`;
+- published Catalog revision `1` with snapshot SHA-256
+  `123fe2375d16d0334c12aae4359db9fe3bd30390ecb913f33fb00fd728e2e895`;
+- verified the published values through `/v1/catalog/options` and production
+  D1, including four member-attributed `audit_event` records;
+- replayed the same four requests and received `idempotent_reuse: true` without
+  increasing the Company, Company Work Mode, Position, Catalog Revision, or
+  matching audit-event counts;
+- confirmed the exact-email Access identity can use the API and an unauthorized
+  email is denied.
+
+This acceptance does not copy staging runtime data or enable production provider
+traffic. Initial bulk Reference/Catalog CSV import remains deferred. Routine
+single-record business changes must continue through the Access-protected
+Operations API rather than direct D1 writes.
+
 ## Documentation / 文档索引
 
 - [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md): local Git, GitHub, Wrangler, and D1 deployment guide
