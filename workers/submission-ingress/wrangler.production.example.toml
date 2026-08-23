@@ -4,6 +4,11 @@ compatibility_date = "2026-08-18"
 workers_dev = true
 preview_urls = false
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+
 # Temporary no-domain route: protect this Worker's workers.dev URL with
 # Cloudflare Access. Replace it with a reviewed custom domain when available.
 
