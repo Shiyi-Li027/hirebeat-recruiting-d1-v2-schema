@@ -654,3 +654,68 @@ Status: **PASS for persisted invocation logging and basic runtime visibility**.
 ### Scope and remaining work
 
 The health verification made no D1 writes and submitted no Queue or Workflow messages. Proactive alerts, controlled failure-path monitoring, and rollback validation remain separate follow-up milestones.
+
+## Production 定时运行时监控运行手册与证据（2026-08-23）
+
+### 当前配置
+
+Production 运行时监控由
+`.github/workflows/monitor-production-runtime.yml` 执行：
+
+- 定时频率：每 15 分钟
+- 手工触发：支持
+- GitHub Environment：`production-monitoring`
+- 检查对象：
+  - Submission Ingress `/health`
+  - Operations API `/health`
+- 认证方式：专用 Cloudflare Access monitoring Service Token
+- 数据修改：不执行 D1、Queue 或 Workflow 写入
+
+### 已验证证据
+
+首次确认的定时运行：
+
+- run number：`#2`
+- database ID：`32661661195`
+- event：`schedule`
+- branch：`main`
+- commit：
+  `a8aec519d4951902960102351bd2322126e5c39e`
+- started：`2026-08-23T19:34:25Z`
+- completed：`2026-08-23T19:34:35Z`
+- conclusion：`success`
+
+该运行确认：
+
+- Submission Ingress `/health`：PASS
+- Operations API `/health`：PASS
+- Cloudflare Access service authentication：PASS
+- D1/Queue/Workflow mutation：none
+
+### 日常检查
+
+1. 打开 GitHub Actions 的 `Monitor production runtime endpoints`。
+2. 确认最近的 scheduled run 为 `success`。
+3. 若失败，打开失败 job，先区分：
+   - Cloudflare Access 认证失败
+   - Submission Ingress 健康检查失败
+   - Operations API 健康检查失败
+   - GitHub Environment Secret 或 Variable 缺失
+4. 不要通过重复提交业务数据来测试健康状态。
+5. 不要为了排障绕过 Cloudflare Access。
+6. 修复后手工运行一次 workflow，并等待下一次 scheduled run 成功。
+
+### 告警与后续工作
+
+当前已保留：
+
+- Access Service Token expiration notification
+- Billing Budget Alert
+
+当前账户 UI 未提供适用的 Workers/Queues 错误阈值通知。因此仍需后续完成：
+
+- 受控失败路径演练
+- 告警邮件送达验证
+- Queue/DLQ 异常监控设计
+- rollback 验证
+- 公司账号接管后的通知收件人和 monitoring token 轮换

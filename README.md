@@ -512,3 +512,27 @@ Production Google Form choices consume only the latest published Catalog Revisio
 - The temporary Apps Script verification function was removed; `onHireBeatFormSubmit` and the five-minute `syncHireBeatCatalogOptions` trigger remain unchanged.
 - This verification made no D1 writes and submitted no Queue or Workflow messages.
 - Proactive alerts, controlled failure-path monitoring, and rollback validation remain pending.
+
+## Production scheduled runtime monitoring evidence (2026-08-23)
+
+Production runtime endpoint monitoring is active through
+`.github/workflows/monitor-production-runtime.yml`.
+
+- the workflow runs every 15 minutes and also supports manual dispatch
+- Submission Ingress `/health`: PASS
+- Operations API `/health`: PASS
+- Cloudflare Access service authentication: PASS
+- scheduled run `#2` (`32661661195`) succeeded from `main`
+- validated commit:
+  `a8aec519d4951902960102351bd2322126e5c39e`
+- monitoring performs no D1, Queue, or Workflow mutation
+
+Cloudflare notifications retained for the current production account:
+
+- Access service-token expiration notification
+- billing budget notification
+
+Native Workers/Queues error-threshold notifications were not available in the
+current account UI. Endpoint monitoring is active, while deliberate
+failure-path, rollback, and broader alert-delivery validation remain separate
+follow-up work.

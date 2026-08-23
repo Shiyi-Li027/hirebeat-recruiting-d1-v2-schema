@@ -523,3 +523,24 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 - 本次健康检查没有写入 D1，也没有提交 Queue 或 Workflow 消息。
 
 以上只确认日志持久化和基础可见性；主动告警、受控失败路径监控与回滚验证仍待完成。
+
+## Production 定时运行时监控验收（2026-08-23）
+
+受 Cloudflare Access 保护的 production 运行时端点监控已经启用并通过首次定时验收：
+
+- GitHub Actions workflow：
+  `.github/workflows/monitor-production-runtime.yml`
+- 每 15 分钟执行一次，同时支持手工触发
+- Submission Ingress `/health`：PASS
+- Operations API `/health`：PASS
+- Cloudflare Access Service Token 认证：PASS
+- 首次确认的定时运行：run `#2`，database ID `32661661195`
+- 运行分支：`main`
+- 运行 commit：
+  `a8aec519d4951902960102351bd2322126e5c39e`
+- D1、Queue、Workflow 写入：无
+
+当前 Cloudflare 账户已保留 Access Service Token 到期通知和 Billing
+Budget Alert。由于当前账户界面没有提供可用的 Workers/Queues
+错误阈值通知，端点可用性监控已经完成，但主动故障注入、失败路径告警、
+告警送达演练和 rollback 验证仍作为独立后续事项保留。
