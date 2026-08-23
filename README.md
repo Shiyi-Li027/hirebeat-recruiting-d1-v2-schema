@@ -501,138 +501,6 @@ Production Google Form choices consume only the latest published Catalog Revisio
 
 日常操作步骤见 `15_production_implementation_runbook.md`；事件驱动同步的未来设计见 `03_future_optimization_recommendations.md`。
 
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow runs every 15
-  minutes and also supports explicit manual dispatch.
-- Manual run `#1` and scheduled run `#2` both passed from `main`.
-- Scheduled run `#2` (`32661661195`) completed successfully at commit
-  `a8aec519d4951902960102351bd2322126e5c39e`, from
-  `2026-08-23T19:34:25Z` through `2026-08-23T19:34:35Z`.
-- The monitor used the dedicated Cloudflare Access monitoring service token to
-  verify Submission Ingress `/health` and Operations API `/health`.
-- Monitoring is read-only: authenticated `GET` requests only, with no D1
-  writes, Queue or Workflow mutations, or production resume/applicant data.
-- The account-wide Expiring Access Service Token Alert and Billing Budget Alert
-  remain enabled; the monitoring token has an explicit expiry.
-- Controlled failure, notification-delivery, and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is active on
-  `main`; manual run `#1` and scheduled run `#2` both succeeded.
-- Scheduled run `#2` (run ID `32661661195`) completed from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access
-  service authentication passed.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has
-  an explicit expiration date. The account-wide Expiring Access Service Token
-  Alert and Billing Budget Alert remain enabled.
-- Controlled failure/notification-delivery and rollback drills remain pending.
-
-## Production scheduled runtime monitoring evidence (2026-08-23)
-
-- The protected `Monitor production runtime endpoints` workflow is deployed on
-  `main` and runs every 15 minutes, with manual dispatch also available.
-- Scheduled run `#2` (run ID `32661661195`) completed successfully from commit
-  `a8aec519d4951902960102351bd2322126e5c39e`.
-- The run verified the Access-protected Submission Ingress `/health` and
-  Operations API `/health` endpoints, including Cloudflare Access service-token
-  authentication.
-- The monitor is read-only and performed no D1, Queue, or Workflow mutation.
-- The dedicated monitoring service token has an explicit expiration date.
-  Account-wide Access service-token expiry notification and a USD 5 billing
-  budget alert are configured.
-- Controlled monitoring-failure notification testing and rollback validation
-  remain pending.
-
-Evidence: <https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32661661195>
-
 ## Production Worker observability evidence (2026-08-23)
 
 - PR #24 enabled persisted invocation logs for production Submission Ingress and ETL Orchestrator; it was merged as `871b93a`.
@@ -644,11 +512,27 @@ Evidence: <https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actio
 - The temporary Apps Script verification function was removed; `onHireBeatFormSubmit` and the five-minute `syncHireBeatCatalogOptions` trigger remain unchanged.
 - This verification made no D1 writes and submitted no Queue or Workflow messages.
 - Proactive alerts, controlled failure-path monitoring, and rollback validation remain pending.
+
 ## Production scheduled runtime monitoring evidence (2026-08-23)
 
-- The protected `Monitor production runtime endpoints` workflow runs every 15 minutes and also supports manual dispatch.
-- Scheduled run `#2` (`32661661195`) completed successfully from `main` commit `a8aec519d4951902960102351bd2322126e5c39e` on 2026-08-23.
-- Authenticated, read-only health checks passed for Submission Ingress `/health`, Operations API `/health`, and Cloudflare Access service authentication.
-- The monitor performed no D1 writes and submitted no Queue or Workflow messages.
-- The dedicated `hirebeat-production-runtime-monitor` Access service token has an explicit expiry. The account-wide Access service-token expiry alert and the USD 5 billing budget alert remain enabled.
-- Controlled failure-notification testing and production rollback validation remain pending follow-up work.
+Production runtime endpoint monitoring is active through
+`.github/workflows/monitor-production-runtime.yml`.
+
+- the workflow runs every 15 minutes and also supports manual dispatch
+- Submission Ingress `/health`: PASS
+- Operations API `/health`: PASS
+- Cloudflare Access service authentication: PASS
+- scheduled run `#2` (`32661661195`) succeeded from `main`
+- validated commit:
+  `a8aec519d4951902960102351bd2322126e5c39e`
+- monitoring performs no D1, Queue, or Workflow mutation
+
+Cloudflare notifications retained for the current production account:
+
+- Access service-token expiration notification
+- billing budget notification
+
+Native Workers/Queues error-threshold notifications were not available in the
+current account UI. Endpoint monitoring is active, while deliberate
+failure-path, rollback, and broader alert-delivery validation remain separate
+follow-up work.
