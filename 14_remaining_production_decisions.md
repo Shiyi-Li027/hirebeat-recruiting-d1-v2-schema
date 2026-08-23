@@ -508,3 +508,18 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 6. 若五分钟触发器尚未在 Triggers 页面确认存在，或尚未在 Executions 中确认成功，则手动同步仍是当前必需步骤。
 7. 普通招聘人员不需要 Apps Script 访问权限，也不承担目录同步决策或执行职责。
 8. Catalog Revision 发布后自动触发 Google Form 同步属于未来优化，当前保持 **DEFERRED**。
+
+## Production Worker 可观测性验收（2026-08-23）
+
+状态：**PASS（持久化调用日志和基础运行可见性）**。
+
+- PR #24 已在 `main` commit `871b93a` 合并 production Submission Ingress 与 ETL Orchestrator 的持久化 invocation logs 配置。
+- 受保护的 `Deploy production Workers` run `#5` 经 production Environment 人工审批后，从该 commit 成功重新部署两个 Workers。
+- run `#4` 因确认文本不是精确的 `DEPLOY PRODUCTION WORKERS` 而仅在 preflight 阶段失败，部署 job 未执行，证明生产确认保护有效。
+- 两个 production 模板均配置 `[observability.logs]`、`enabled = true` 和 `invocation_logs = true`。
+- ETL Orchestrator 已记录 `*/1 * * * *` scheduled 事件，结果为 `ok`（1 success、0 errors）。
+- 通过 Cloudflare Access 调用 production Ingress `/health` 返回 HTTP 200；Ingress observability 记录到该成功请求（1 success、0 errors）。
+- 临时 `verifyProductionIngressObservability()` 已删除；`onHireBeatFormSubmit` 与每五分钟 `syncHireBeatCatalogOptions` 两个既有触发器保持不变。
+- 本次健康检查没有写入 D1，也没有提交 Queue 或 Workflow 消息。
+
+以上只确认日志持久化和基础可见性；主动告警、受控失败路径监控与回滚验证仍待完成。
