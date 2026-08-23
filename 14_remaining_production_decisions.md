@@ -509,6 +509,146 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 7. 普通招聘人员不需要 Apps Script 访问权限，也不承担目录同步决策或执行职责。
 8. Catalog Revision 发布后自动触发 Google Form 同步属于未来优化，当前保持 **DEFERRED**。
 
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成：
+
+- 受保护的 `Monitor production runtime endpoints` workflow 每 15 分钟定时
+  运行，并保留显式手工触发入口。
+- `main` 上的手工 run `#1` 与定时 run `#2` 均成功。
+- 定时 run `#2`（`32661661195`）在 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 上执行，开始时间为
+  `2026-08-23T19:34:25Z`，完成时间为 `2026-08-23T19:34:35Z`。
+- 监控使用独立的 Cloudflare Access production monitoring service token，
+  只对 Submission Ingress `/health` 和 Operations API `/health` 发起已认证的
+  `GET` 请求；凭据值不进入仓库或日志。
+- 该流程不写 D1、不投递 Queue/Workflow 消息，也不读取或提交 production
+  简历和申请人数据。
+- Cloudflare 账户级 Expiring Access Service Token Alert 与 Billing Budget
+  Alert 已保留；monitoring token 已设置明确过期时间。
+
+仍待完成：
+
+1. 受控故障演练；
+2. 实际故障通知送达验证；
+3. production 回滚演练。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+已完成受保护的 production 运行时定时监控验收：
+
+- `Monitor production runtime endpoints` 已在 `main` 启用；手工 run `#1`
+  与 schedule run `#2` 均成功。
+- schedule run `#2`（run ID `32661661195`）基于 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 完成。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service authentication 均通过。
+- 监控只执行认证后的只读健康检查，没有 D1 写入，也没有提交 Queue 或
+  Workflow 消息。
+- `hirebeat-production-runtime-monitor` Service Token 已设置明确过期时间；
+  账号级 Expiring Access Service Token Alert 与 Billing Budget Alert 已保留。
+- 受控故障与通知送达验证、rollback 演练仍为后续事项，不能把本次成功监控
+  解释为这些能力已经验收。
+
+## Production 定时运行时监控状态（2026-08-23）
+
+- 受保护的 `Monitor production runtime endpoints` workflow 已合并到 `main`，
+  每 15 分钟自动运行，也支持手工触发。
+- 定时 run `#2`（run ID `32661661195`）从 commit
+  `a8aec519d4951902960102351bd2322126e5c39e` 执行成功。
+- Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access
+  service-token 认证均通过。
+- 该监控只执行经 Access 认证的 `GET /health`，不会写入 D1，也不会发送
+  Queue 或 Workflow 消息。
+- 专用 monitoring service token 已设置明确过期时间；Cloudflare 账户级
+  token 到期通知和 USD 5 billing budget alert 已保留。
+- 故障通知的受控触发测试、告警接收确认以及 rollback 验证仍为后续生产事项。
+
 ## Production Worker 可观测性验收（2026-08-23）
 
 状态：**PASS（持久化调用日志和基础运行可见性）**。
@@ -523,3 +663,30 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 - 本次健康检查没有写入 D1，也没有提交 Queue 或 Workflow 消息。
 
 以上只确认日志持久化和基础可见性；主动告警、受控失败路径监控与回滚验证仍待完成。
+
+## Production 定时运行时监控验收（2026-08-23）
+
+已完成并确认：
+
+- 受保护的 GitHub Actions `Monitor production runtime endpoints` 已配置为每 15 分钟定时运行，并保留手工触发入口。
+- 定时 run [`#2`](https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32661661195) 从 `main` commit `a8aec51` 启动，事件为 `schedule`，于 2026-08-23T19:34:25Z 开始、19:34:35Z 成功结束。
+- production Submission Ingress 与 Operations API 的 Access 认证 `GET /health` 检查均通过。
+- 监控只执行只读健康检查，没有写入 D1，也没有向 Queue 或 Workflow 提交消息。
+- 监控使用独立的 `hirebeat-production-runtime-monitor` Access Service Token，该 Token 已设置明确过期时间。
+- Cloudflare 账户级 Access Service Token 过期提醒以及 USD 5 Billing Budget Alert 已保留。
+
+仍待完成：
+
+- 人为制造一次受控、可恢复的监控失败，确认 GitHub Actions 失败通知能够到达指定接收人。
+- 完成 production Worker 与相关运行配置的回滚演练和证据记录。
+## Production 定时运行时监控验收（2026-08-23）
+
+production 运行时的只读定时监控已经完成最小验收：
+
+- 受保护的 GitHub Actions `Monitor production runtime endpoints` workflow 已配置为每 15 分钟运行一次，并保留手工触发入口。
+- 定时 run `#2`（database ID `32661661195`）从 `main` commit `a8aec519d4951902960102351bd2322126e5c39e` 启动，状态为 `completed`，结论为 `success`。
+- Submission Ingress `/health`、Operations API `/health` 与 Cloudflare Access service authentication 均通过。
+- 本监控仅执行经过 Access 认证的 GET 请求，没有写入 D1，也没有投递 Queue 或 Workflow 消息。
+- 专用 Access service token `hirebeat-production-runtime-monitor` 已设置明确过期时间；账户级 Access service-token 到期提醒与 USD 5 Billing Budget Alert 已保留。
+
+以上证据只确认正常路径的定时健康检查与凭据到期/预算提醒准备完成。受控失败通知测试、失败路径监控和 production rollback 验证仍为待办，不能据此标记为已完成。
