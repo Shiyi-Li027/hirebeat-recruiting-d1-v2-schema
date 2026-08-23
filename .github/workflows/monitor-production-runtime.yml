@@ -12,6 +12,12 @@ on:
         required: true
         type: string
 
+
+      simulate_failure:
+        description: Intentionally fail after successful read-only checks
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 
@@ -200,3 +206,17 @@ jobs:
           echo "No D1 write commands were executed."
           echo "No Queue or Workflow messages were submitted."
           echo "No production resume or applicant data was used."
+
+      - name: Simulate monitoring failure after successful checks
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure }}
+        shell: bash
+        run: |
+          {
+            echo "## Intentional monitoring failure-path validation"
+            echo
+            echo "- Real read-only health checks completed successfully before this step."
+            echo "- Failure was intentionally generated; no production resource was changed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error::Intentional production monitoring failure-path validation after successful read-only checks."
+          exit 1
