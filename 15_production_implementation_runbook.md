@@ -587,3 +587,70 @@ The `person = 2` and `application = 3` result is consistent with the synthetic i
 - 不要绕过 Operations API 直接写 D1。
 - 不要在发布 Catalog Revision 之前同步草稿数据。
 - 不要把 0–5 分钟目标延迟描述为可用性 SLA。
+
+## Production Worker observability verification (2026-08-23)
+
+Status: **PASS for persisted invocation logging**. This verification confirms that production Worker invocations reach the Cloudflare observability dashboard; it does not complete proactive alerting, deliberate failure-path monitoring, or rollback validation.
+
+### Deployment evidence
+
+- PR #24, `Enable production Worker observability`, was merged to `main` at commit `871b93a`.
+- `Deploy production Workers` run `#4` stopped during preflight because the confirmation text was not the exact required value `DEPLOY PRODUCTION WORKERS`; the deployment job did not run.
+- Protected run `#5` used the exact confirmation, received `production` Environment approval, and successfully redeployed Submission Ingress and ETL Orchestrator.
+- Both generated production configurations contain:
+
+  ```toml
+  [observability.logs]
+  enabled = true
+  invocation_logs = true
+  ```
+
+### Runtime verification
+
+- Submission Ingress was called through the Access-protected production route at `GET /health`.
+- The response was HTTP 200 and identified `hirebeat-submission-ingress`, version `1.0.0-production-ingress`, `status=running`, `deploymentStage=production`, and `writesEnabled=true`.
+- Cloudflare Observability recorded the request as one successful invocation with zero errors.
+- ETL Orchestrator recorded its scheduled cron `*/1 * * * *` invocation with outcome `ok`, one success, and zero errors.
+- The health verification did not issue a D1 write command and did not submit a Queue or Workflow message.
+
+### Post-verification state
+
+- The temporary Apps Script function `verifyProductionIngressObservability()` was deleted after the event appeared in Cloudflare.
+- The production Google Form keeps its two operational triggers unchanged:
+  - `onHireBeatFormSubmit`: form-submit provider processing.
+  - `syncHireBeatCatalogOptions`: five-minute Catalog synchronization.
+- Remaining production-readiness work includes proactive alert rules, controlled failure-path monitoring, and a reviewed rollback exercise.
+
+## Production Worker observability evidence (2026-08-23)
+
+Status: **PASS for persisted invocation logging and basic runtime visibility**.
+
+### Deployment evidence
+
+- PR #24 was merged to `main` as commit `871b93a`.
+- Protected `Deploy production Workers` run `#5` redeployed Submission Ingress and ETL Orchestrator after production Environment approval.
+- Run `#4` failed only in preflight because the supplied confirmation text was not exactly `DEPLOY PRODUCTION WORKERS`; its deployment job never ran.
+- Both production templates contain:
+
+  ```toml
+  [observability.logs]
+  enabled = true
+  invocation_logs = true
+  ```
+
+### Runtime evidence
+
+- ETL Orchestrator observability recorded its `*/1 * * * *` scheduled invocation with outcome `ok` (1 success, 0 errors).
+- A temporary Apps Script verifier called the Access-protected production Ingress `/health` endpoint and received HTTP 200 with:
+
+  ```json
+  {"service":"hirebeat-submission-ingress","version":"1.0.0-production-ingress","status":"running","deploymentStage":"production","writesEnabled":true}
+  ```
+
+- Ingress observability recorded the successful `GET /health` invocation (1 success, 0 errors).
+- The temporary `verifyProductionIngressObservability()` function was removed after verification.
+- The existing `onHireBeatFormSubmit` and five-minute `syncHireBeatCatalogOptions` triggers remain unchanged.
+
+### Scope and remaining work
+
+The health verification made no D1 writes and submitted no Queue or Workflow messages. Proactive alerts, controlled failure-path monitoring, and rollback validation remain separate follow-up milestones.

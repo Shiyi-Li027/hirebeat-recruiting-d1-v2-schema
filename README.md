@@ -500,3 +500,15 @@ Production Google Form choices consume only the latest published Catalog Revisio
 - 不要删除或替换 `onHireBeatFormSubmit`；不要使用 `onOpen` 来同步目录。普通招聘人员不需要获得 Apps Script 权限，也不负责选择或执行同步方式。
 
 日常操作步骤见 `15_production_implementation_runbook.md`；事件驱动同步的未来设计见 `03_future_optimization_recommendations.md`。
+
+## Production Worker observability evidence (2026-08-23)
+
+- PR #24 enabled persisted invocation logs for production Submission Ingress and ETL Orchestrator; it was merged as `871b93a`.
+- Protected `Deploy production Workers` run `#5` redeployed both Workers from `main` commit `871b93a` after production Environment approval.
+- Run `#4` stopped in preflight because its confirmation text did not exactly match `DEPLOY PRODUCTION WORKERS`; the deployment job did not run.
+- Both production templates now set `[observability.logs]` with `enabled = true` and `invocation_logs = true`.
+- ETL Orchestrator observability recorded the `*/1 * * * *` scheduled event with outcome `ok` (1 success, 0 errors).
+- An Access-authenticated `GET /health` returned HTTP 200 from production Ingress, and Ingress observability recorded the request (1 success, 0 errors).
+- The temporary Apps Script verification function was removed; `onHireBeatFormSubmit` and the five-minute `syncHireBeatCatalogOptions` trigger remain unchanged.
+- This verification made no D1 writes and submitted no Queue or Workflow messages.
+- Proactive alerts, controlled failure-path monitoring, and rollback validation remain pending.
