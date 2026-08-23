@@ -457,3 +457,15 @@ Operations API rather than direct D1 writes.
 ## License
 
 No open-source license is included. Unless the repository owner adds a license, all rights are reserved and the contents may not be reused or redistributed without permission.
+
+## Production Google Form Catalog synchronization / 生产 Google Form 目录同步
+
+Production Google Form choices consume only the latest published Catalog Revision.
+
+- Company、Work Mode 与 Position 的新增或更新必须先通过 Operations API 完成，并发布新的 Catalog Revision。
+- 如果新岗位需要立即显示，由获授权的 Catalog/Operations 操作人员手动运行 `syncHireBeatCatalogOptions()`。
+- 如果不要求立即显示，可以依赖**已经配置且验证成功**的五分钟 time-driven trigger。正常目标延迟为约 0–5 分钟，但这不是硬性 SLA。
+- 在 Apps Script 的 Triggers 页面能够看到该触发器、且 Executions 中至少确认一次成功运行之前，必须继续使用手动同步。
+- 不要删除或替换 `onHireBeatFormSubmit`；不要使用 `onOpen` 来同步目录。普通招聘人员不需要获得 Apps Script 权限，也不负责选择或执行同步方式。
+
+日常操作步骤见 `15_production_implementation_runbook.md`；事件驱动同步的未来设计见 `03_future_optimization_recommendations.md`。

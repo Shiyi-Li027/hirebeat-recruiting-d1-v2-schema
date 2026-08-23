@@ -453,3 +453,53 @@ The following items remain required before production enablement:
 These values and resources cannot be safely invented in source code. Their
 absence must block production enablement, not weaken authentication, reuse
 staging infrastructure or silently apply defaults.
+
+## Production Google Form Catalog 日常同步操作
+
+### 适用范围与责任人
+
+本流程用于 Operations API 中的 Company、Work Mode 或 Position 发生变化后，将最新的已发布 Catalog Revision 同步到 production Google Form。执行者必须是获授权的 Catalog/Operations 操作人员；普通招聘人员不需要进入 Apps Script。
+
+### 每次 Catalog 变更后的标准流程
+
+1. 通过 Operations API 创建或更新 Company、Company Work Mode 和 Position。
+2. 完成业务复核后，通过 Operations API 发布新的 Catalog Revision。
+3. 根据业务时效选择：
+   - **立即需要显示**：手动运行 `syncHireBeatCatalogOptions()`。
+   - **不要求立即显示**：等待已经配置且验证成功的五分钟 time-driven trigger。
+4. 同步后检查 production Google Form 的 Position 选项，确认 Company → Work Mode → Position 层级与最新 Revision 一致。
+5. 在 Apps Script 的 Executions 页面确认本次 `syncHireBeatCatalogOptions` 状态为成功，并核对记录的 revision number、snapshot SHA-256 和同步时间。
+6. 若同步失败，不得让招聘人员继续使用可能过期的选项；先检查 Script Properties、Cloudflare Access Service Token、Operations API 可用性和执行日志，然后重试。
+
+### 核对或创建五分钟触发器
+
+1. 打开 production Google Form 绑定的 Apps Script 项目。
+2. 点击左侧 **Triggers**（闹钟图标）。
+3. 保留现有的 `onHireBeatFormSubmit` / **From form – On form submit** 触发器，不要删除或修改。
+4. 检查是否存在以下触发器：
+   - Function：`syncHireBeatCatalogOptions`
+   - Deployment：`Head`
+   - Event source：`Time-driven`
+   - Time based trigger type：`Minutes timer`
+   - Minute interval：`Every 5 minutes`
+5. 如果不存在，点击 **Add Trigger**，按上述值创建并完成 Google 授权。
+6. 创建后先在编辑器中手动运行一次 `syncHireBeatCatalogOptions()`，再到 **Executions** 确认成功。
+7. 只有在 Triggers 页面可见且至少一次执行成功后，才可以把它视为已启用。在此之前，每次发布 Revision 后都必须手动同步。
+
+### 立即手动同步
+
+1. 打开 production Google Form 对应的 Apps Script 项目。
+2. 在函数下拉框选择 `syncHireBeatCatalogOptions`。
+3. 点击 **Run**。
+4. 等待 Execution log 显示成功。
+5. 打开 production Google Form，确认职位列表已更新。
+6. 在 Executions 中保存本次成功运行的时间、revision number 和 snapshot SHA-256 作为验收证据。
+
+### 禁止事项
+
+- 不要用 `onOpen` 代替手动或五分钟定时同步。
+- 不要删除 `onHireBeatFormSubmit`。
+- 不要让普通招聘人员获得 Apps Script、Service Token 或生产基础设施权限。
+- 不要绕过 Operations API 直接写 D1。
+- 不要在发布 Catalog Revision 之前同步草稿数据。
+- 不要把 0–5 分钟目标延迟描述为可用性 SLA。
