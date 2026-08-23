@@ -458,6 +458,37 @@ Operations API rather than direct D1 writes.
 
 No open-source license is included. Unless the repository owner adds a license, all rights are reserved and the contents may not be reused or redistributed without permission.
 
+## Production Google Form provider end-to-end acceptance
+
+Status: **PASS for controlled synthetic production acceptance** (2026-08-22).
+
+The production Google Form provider path has been verified end to end:
+
+`Google Form -> Apps Script provider bridge -> Cloudflare Access-protected Submission Ingress -> D1/R2 -> Intake Queue -> ETL Workflows -> Parser/ML`
+
+Three controlled synthetic submissions completed successfully. Production D1 contains three applications and three ML analysis runs; the Intake Queue acknowledged all three messages without retry and returned to zero backlog; the DLQ has no unacknowledged messages; production R2 contains the raw-resume and replay-envelope objects; and the foreign-key check returned zero violations.
+
+This evidence does not authorize broad real-applicant traffic. Production monitoring and alerting, explicit failure-path acceptance, rollback validation, operational ownership and business launch approval remain separate prerequisites. See `15_production_implementation_runbook.md`.
+
+## Production Google Form provider end-to-end acceptance
+
+Status: **PASS for controlled synthetic production acceptance (2026-08-22)**.
+
+The production provider path has been exercised end to end through:
+
+`Google Form -> Apps Script -> Cloudflare Access-protected Submission Ingress -> D1/R2 -> Queue -> Workflows -> Parser/ML`
+
+Acceptance evidence:
+
+- three synthetic production Google Form submissions were accepted;
+- production D1 contains three applications and three ML analysis runs;
+- the production intake Queue ingested and acknowledged three messages with zero retries and zero remaining backlog;
+- the production intake DLQ contained no unacknowledged messages;
+- production R2 contains the corresponding raw-resume and intake replay-envelope artifacts;
+- `pragma_foreign_key_check` reported zero violations.
+
+This is controlled synthetic acceptance evidence only. It does not authorize broad real-applicant traffic. Production monitoring and alerting, failure-path validation, rollback validation, operational ownership and final launch approval remain required before general production enablement.
+
 ## Production Google Form Catalog synchronization / 生产 Google Form 目录同步
 
 Production Google Form choices consume only the latest published Catalog Revision.
