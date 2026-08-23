@@ -286,6 +286,31 @@ tuple；任一字段变化后先筛选兼容 tuple 集合，再从集合中重�
 这是一项 Provider/UI 层的未来增强，不是当前 D1 Schema、Migration、历史记录、
 Workflow 数据模型或 Application/Candidate/Person 表结构的缺口。只有将来新的持久化、
 上传会话或审计需求无法由现有结构表达时，才另行评估 migration。
+## Catalog Revision 发布后的 Google Form 同步（当前操作模型与未来优化）
+
+### 当前过渡期：立即同步或等待定时同步
+
+当前 production Google Form 的职位选项来自已发布的 Catalog Revision，而不是尚未发布的 Company 或 Position 草稿。招聘人员通过 Operations API 新增或更新岗位后，应先完成 Catalog Revision 发布；随后可根据业务时效选择以下任一方式：
+
+1. **需要立即显示新岗位**：由已获授权的操作人员进入该 production Google Form 绑定的 Apps Script 项目，手动运行 `syncHireBeatCatalogOptions()`。成功后应核对表单中的 Company → Work Mode → Position 选项，以及记录的 revision 和 snapshot SHA-256。
+2. **不要求立即显示**：无需执行任何 Apps Script 手动操作，等待现有的五分钟 time-driven trigger 自动运行 `syncHireBeatCatalogOptions()`。正常目标延迟为 0–5 分钟，但 Apps Script 由 Google 调度，可能偶发延后，因此这不是硬性 SLA。
+
+发布岗位的操作说明和未来管理界面必须明确展示这两个选择，让招聘人员自行决定是否执行可选的“立即同步”。手动运行只刷新 Google Form 对已发布 Catalog 快照的消费结果，不得直接写 D1，也不能代替 Catalog Revision 发布。
+
+### 未来优化：发布成功后自动触发
+
+当内部 Operations Console 建成后，可在“发布 Catalog Revision”成功后，由受控的后端流程直接触发对应 Google Form Sync，使表单接近即时显示最新岗位。该能力当前保持 deferred，不属于现阶段 production 基础设施和最小写入验收范围。
+
+实现时至少需要满足：
+
+1. 以 `target + catalog_revision_id + snapshot_sha256` 生成确定性幂等键，重复触发不得重复产生同步副作用。
+2. 通过受保护的服务调用、Queue 或 Outbox dispatcher 执行，不向浏览器暴露 Cloudflare Access Service Token 或其他生产凭据。
+3. 使用现有 `catalog_sync_run` 和 `catalog_sync_target_run` 记录目标、attempt、结果、错误和最终状态。
+4. 对网络错误、429 和 5xx 执行有上限的退避重试；对权限、字段映射、目标删除等永久错误进入 terminal / DLQ 处理。
+5. 在 Operations Console 显示同步状态、最后成功 revision、snapshot SHA-256、错误原因和受控重试入口。
+6. 只有目标 Google Form 确认应用了预期 revision 和 snapshot 后，才能把同步标记为成功。
+7. 自动触发稳定并通过 staging 验收前，保留五分钟定时触发器作为恢复和兜底路径；不得同时形成无法审计的第二条数据写入通道。
+
 ## 15. Operations 业务访问模型与内部管理页面（未来优化）
 
 ### 当前能力与边界
@@ -440,3 +465,28 @@ production 基础设施和最小业务链路验收。
 未来内部 Operations Console 和 route-level RBAC 完成后，普通业务人员的日常单条
 变更仍应走受控页面和 Operations API；批量 importer 应只开放给经过授权的
 Operations Admin，而不应成为所有业务用户都可使用的通用写入入口。
+
+### 冻结的当前责任边界
+
+当前生产操作模型明确区分“业务变更”“发布”和“表单同步”：
+
+1. Catalog/Operations 操作人员通过 Operations API 维护 Company、Work Mode 和 Position。
+2. 只有发布新的 Catalog Revision 后，变更才有资格进入 Google Form。
+3. 急需显示时，获授权人员手动运行 `syncHireBeatCatalogOptions()`；不急需时，可以等待已经配置且验证成功的五分钟 time-driven trigger。
+4. 五分钟是正常目标延迟而非硬性 SLA；若触发器尚未验证存在并成功执行，手动同步仍是必需步骤。
+5. 普通招聘人员不需要 Apps Script 权限，也不负责选择同步方式。
+6. 保留 `onHireBeatFormSubmit` 处理申请提交；不使用 `onOpen` 做目录同步。
+
+### Catalog Revision 事件驱动同步（DEFERRED）
+
+未来可把“发布 Catalog Revision”与 Google Form 同步连接成事件驱动流程，从而不再依赖人工加速或周期轮询。实现时应满足：
+
+- Revision 发布事务生成明确的 Outbox/Queue 事件，不由浏览器直接触发同步；
+- 消费者按 revision number 与 snapshot SHA-256 幂等处理；
+- 只同步已发布 Revision，拒绝草稿或过期事件；
+- 对网络、429 和 5xx 执行退避重试，对永久配置错误进入 terminal/DLQ；
+- 保留 actor、revision、目标表单、attempt、结果和时间等审计证据；
+- 在 staging 覆盖成功、重复事件、乱序事件、过期 Revision、Access 失败和重试恢复；
+- production 上线前经过受保护部署审批和可回滚验证。
+
+该优化当前不修改已经通过 staging 与 production 验收的 Apps Script 提交流程，也不阻塞现有手动/五分钟触发器操作模型。

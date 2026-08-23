@@ -465,3 +465,16 @@ Access 保护的 Operations API 执行，不允许绕过 API 直接写 productio
 
 D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发现安全阻断、技术上无法
 实现，或新需求与冻结决定直接冲突时，才应明确列出冲突和影响，而不能静默修改。
+
+## Production Google Form Catalog 同步决策（2026-08-22）
+
+已冻结以下生产操作边界：
+
+1. Google Form 只消费已经发布的 Catalog Revision；未发布的 Company、Work Mode 或 Position 草稿不得进入表单选项。
+2. 现有 `onHireBeatFormSubmit` 触发器继续负责申请提交，不得为目录同步而删除或替换。
+3. 不采用 `onOpen` 同步。Google Form 响应者打开表单时，表单绑定的 Apps Script 并不提供可靠的逐次打开同步语义，而且会引入竞态、延迟和不必要的写入。
+4. 新 Revision 急需显示时，由获授权的 Catalog/Operations 操作人员手动运行 `syncHireBeatCatalogOptions()`。
+5. 不急需显示时，可以依赖已经配置且验证成功的五分钟 time-driven trigger；0–5 分钟只是正常操作目标，不是硬性 SLA。
+6. 若五分钟触发器尚未在 Triggers 页面确认存在，或尚未在 Executions 中确认成功，则手动同步仍是当前必需步骤。
+7. 普通招聘人员不需要 Apps Script 访问权限，也不承担目录同步决策或执行职责。
+8. Catalog Revision 发布后自动触发 Google Form 同步属于未来优化，当前保持 **DEFERRED**。
