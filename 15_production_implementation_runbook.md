@@ -454,6 +454,90 @@ These values and resources cannot be safely invented in source code. Their
 absence must block production enablement, not weaken authentication, reuse
 staging infrastructure or silently apply defaults.
 
+## Production Google Form provider end-to-end acceptance evidence
+
+Status: **PASS — controlled synthetic production acceptance (2026-08-22)**
+
+The verified production path was:
+
+`Google Form → Apps Script provider bridge → Cloudflare Access-protected Submission Ingress → D1/R2 → Intake Queue → ETL Workflows → Parser/ML`
+
+### Observed evidence
+
+- Three controlled synthetic Google Form submissions completed successfully.
+- Apps Script `onHireBeatFormSubmit` executions completed.
+- The production Intake Queue ingested 3 messages, acknowledged 3 messages, retried 0 messages and returned to 0 backlog.
+- The production Intake DLQ contained no unacknowledged messages.
+- Production R2 contains submission-scoped objects under both `raw-resumes/v1` and `intake-replay-envelopes/v1`.
+- The production Catalog option synchronizer continued to complete on its five-minute time-based trigger.
+
+### Production D1 acceptance counts
+
+| Table or check | Observed value |
+| --- | ---: |
+| `raw_submission` | 3 |
+| `raw_submission_resume` | 3 |
+| `raw_submission_intake_run` | 3 |
+| `submission_dedup_run` | 3 |
+| `normalization_run` | 3 |
+| `etl_workflow_run` | 6 |
+| `etl_step_run` | 30 |
+| `person` | 2 |
+| `application` | 3 |
+| `application_stage_run` | 9 |
+| `ml_analysis_run` | 3 |
+| `offer` | 0 |
+| `audit_event` | 7 |
+| `outbox_event` | 36 |
+| Foreign-key violations | 0 |
+
+`person = 2` with `application = 3` is expected: the production identity-deduplication path reused a person identity while retaining separate application records.
+
+### Scope boundary
+
+This acceptance proves the minimum controlled synthetic provider path only. It does not authorize broad real-applicant traffic or declare the complete production launch finished. Monitoring and alerting, explicit failure-path acceptance, rollback validation, operational ownership and business launch approval remain separate prerequisites.
+
+## Production Google Form provider end-to-end acceptance evidence
+
+Status: **PASS — controlled synthetic production acceptance on 2026-08-22**.
+
+Validated path:
+
+`Google Form -> Apps Script -> Access-protected Submission Ingress -> D1/R2 -> Intake Queue -> Workflows -> Parser/ML`
+
+Observed evidence:
+
+- three synthetic submissions were sent through the production Google Form;
+- the installed Apps Script `onHireBeatFormSubmit` trigger completed for the submissions;
+- the linked production Form response sheet contains three response rows;
+- production R2 contains three UUID directories under `raw-resumes/v1` and three under `intake-replay-envelopes/v1`;
+- the production Intake Queue ingested and acknowledged three messages, retried zero messages, and returned to zero backlog;
+- observed average Queue consumer lag was approximately 4.13 seconds;
+- the production Intake DLQ reported no unacknowledged messages;
+- the production D1 foreign-key check returned zero violations.
+
+Production D1 counts observed after acceptance:
+
+| Table / check | Count |
+| --- | ---: |
+| `raw_submission` | 3 |
+| `raw_submission_resume` | 3 |
+| `raw_submission_intake_run` | 3 |
+| `submission_dedup_run` | 3 |
+| `normalization_run` | 3 |
+| `etl_workflow_run` | 6 |
+| `etl_step_run` | 30 |
+| `person` | 2 |
+| `application` | 3 |
+| `application_stage_run` | 9 |
+| `ml_analysis_run` | 3 |
+| `offer` | 0 |
+| `audit_event` | 7 |
+| `outbox_event` | 36 |
+| foreign-key violations | 0 |
+
+The `person = 2` and `application = 3` result is consistent with the synthetic identity-deduplication scenario. This acceptance used controlled synthetic data only. It is not approval for broad real-applicant traffic; monitoring and alerting, failure-path validation, rollback validation, operational ownership and final launch approval remain pending.
+
 ## Production Google Form Catalog 日常同步操作
 
 ### 适用范围与责任人

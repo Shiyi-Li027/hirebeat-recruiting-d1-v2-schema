@@ -466,6 +466,36 @@ Access 保护的 Operations API 执行，不允许绕过 API 直接写 productio
 D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发现安全阻断、技术上无法
 实现，或新需求与冻结决定直接冲突时，才应明确列出冲突和影响，而不能静默修改。
 
+## Production Google Form provider 端到端验收（2026-08-22）
+
+受控 synthetic production provider 路径已通过验收：
+
+`Google Form → Apps Script provider bridge → Cloudflare Access 保护的 Submission Ingress → D1/R2 → Intake Queue → ETL Workflows → Parser/ML`
+
+- 3 次受控 synthetic 表单提交均完成；
+- Apps Script `onHireBeatFormSubmit` 执行成功；
+- Intake Queue 写入 3、确认 3、重试 0，并恢复为 0 backlog；
+- DLQ 无未确认消息；
+- R2 已生成 `raw-resumes/v1` 和 `intake-replay-envelopes/v1` 对象；
+- D1 形成 3 个 `application`、3 个 `ml_analysis_run`，外键违规为 0；
+- `person = 2`、`application = 3` 是预期的身份去重与复用结果。
+
+决策：最小受控 production provider 路径判定为 **PASS**。该结论不等于允许广泛真实候选人流量；监控与告警、故障路径、回滚验证、运维责任确认及业务上线审批仍为独立前置条件。
+
+## Production Google Form provider 端到端验收（2026-08-22）
+
+受控的 synthetic production provider 路径已经完成端到端验收并通过：
+
+- 3 条 synthetic Google Form submission 已通过 Apps Script 和受 Cloudflare Access 保护的 production Submission Ingress 接收；
+- production D1 中形成 3 条 `raw_submission`、3 条 `raw_submission_resume`、3 条 `application` 和 3 条 `ml_analysis_run`；
+- `person = 2`、`application = 3` 是预期的身份去重结果，不是数据丢失；
+- production Intake Queue 共接收并确认 3 条消息，retry 为 0、backlog 为 0；
+- production Intake DLQ 没有未确认消息；
+- production R2 的 `raw-resumes/v1` 与 `intake-replay-envelopes/v1` 均存在对应的 3 组 UUID artifact；
+- 外键检查结果为 0 个违规。
+
+该结果只证明受控 synthetic production provider 路径可运行，不代表已经批准接收广泛真实申请人流量。正式开放前仍需完成监控与告警、失败路径、回滚、值班归属和最终 launch approval。
+
 ## Production Google Form Catalog 同步决策（2026-08-22）
 
 已冻结以下生产操作边界：
