@@ -1,0 +1,202 @@
+name: Monitor production runtime endpoints
+
+run-name: Monitor production runtime endpoints
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CHECK PRODUCTION RUNTIME
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitor-production-runtime
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Check Access-protected production endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production-monitoring
+    env:
+      PRODUCTION_INGRESS_BASE_URL: ${{ vars.PRODUCTION_INGRESS_BASE_URL }}
+      PRODUCTION_OPERATIONS_BASE_URL: ${{ vars.PRODUCTION_OPERATIONS_BASE_URL }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.PRODUCTION_MONITOR_CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.PRODUCTION_MONITOR_CF_ACCESS_CLIENT_SECRET }}
+
+    steps:
+      - name: Require main branch and explicit manual confirmation
+        env:
+          MONITOR_CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production monitoring is restricted to main."
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] && \
+             [[ "$MONITOR_CONFIRMATION" != "CHECK PRODUCTION RUNTIME" ]]; then
+            echo "Manual confirmation text did not match."
+            exit 1
+          fi
+
+      - name: Validate protected monitoring configuration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          required = (
+              "PRODUCTION_INGRESS_BASE_URL",
+              "PRODUCTION_OPERATIONS_BASE_URL",
+              "CF_ACCESS_CLIENT_ID",
+              "CF_ACCESS_CLIENT_SECRET",
+          )
+
+          missing = [name for name in required if not os.environ.get(name, "").strip()]
+          if missing:
+              raise SystemExit(
+                  "Missing production-monitoring Environment values: "
+                  + ", ".join(missing)
+              )
+
+          for name in (
+              "PRODUCTION_INGRESS_BASE_URL",
+              "PRODUCTION_OPERATIONS_BASE_URL",
+          ):
+              value = os.environ[name].strip()
+              parsed = urlparse(value)
+              if parsed.scheme != "https":
+                  raise SystemExit(f"{name} must use HTTPS")
+              if not parsed.hostname or parsed.username or parsed.password:
+                  raise SystemExit(f"{name} is not a safe absolute URL")
+              if parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+                  raise SystemExit(f"{name} must be a base URL without a path")
+
+              hostname = parsed.hostname.lower()
+              if "-prod-" not in hostname:
+                  raise SystemExit(f"{name} does not identify a production endpoint")
+              if "staging" in hostname or "-stg-" in hostname:
+                  raise SystemExit(f"{name} points to a staging endpoint")
+
+          print("Protected production monitoring configuration: PASS")
+          PY
+
+      - name: Check Access-protected production health endpoints
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from urllib.parse import urljoin, urlparse
+
+          headers = {
+              "Accept": "application/json",
+              "CF-Access-Client-Id": os.environ["CF_ACCESS_CLIENT_ID"],
+              "CF-Access-Client-Secret": os.environ["CF_ACCESS_CLIENT_SECRET"],
+              "User-Agent": "hirebeat-production-runtime-monitor/1.0",
+          }
+
+          checks = (
+              (
+                  "Submission Ingress",
+                  os.environ["PRODUCTION_INGRESS_BASE_URL"],
+                  {
+                      "service": "hirebeat-submission-ingress",
+                      "status": "running",
+                      "deploymentStage": "production",
+                      "writesEnabled": True,
+                  },
+              ),
+              (
+                  "Operations API",
+                  os.environ["PRODUCTION_OPERATIONS_BASE_URL"],
+                  {
+                      "service": "hirebeat-operations-api",
+                      "status": "running",
+                      "stage": "production",
+                  },
+              ),
+          )
+
+          def check_health(label, base_url, expected):
+              endpoint = urljoin(base_url.rstrip("/") + "/", "health")
+              expected_host = urlparse(base_url).hostname
+              last_error = None
+
+              for attempt in range(1, 4):
+                  try:
+                      request = urllib.request.Request(
+                          endpoint,
+                          headers=headers,
+                          method="GET",
+                      )
+                      with urllib.request.urlopen(request, timeout=15) as response:
+                          if response.status != 200:
+                              raise RuntimeError(f"unexpected HTTP status {response.status}")
+                          if urlparse(response.geturl()).hostname != expected_host:
+                              raise RuntimeError("redirected outside the expected production host")
+                          content_type = response.headers.get("Content-Type", "")
+                          if "application/json" not in content_type.lower():
+                              raise RuntimeError("response is not JSON")
+                          payload = json.loads(response.read().decode("utf-8"))
+
+                      mismatches = {
+                          key: (expected_value, payload.get(key))
+                          for key, expected_value in expected.items()
+                          if payload.get(key) != expected_value
+                      }
+                      if mismatches:
+                          raise RuntimeError(
+                              "health contract mismatch for keys: "
+                              + ", ".join(sorted(mismatches))
+                          )
+
+                      print(f"{label} health check: PASS")
+                      return
+                  except (
+                      urllib.error.HTTPError,
+                      urllib.error.URLError,
+                      TimeoutError,
+                      json.JSONDecodeError,
+                      RuntimeError,
+                  ) as error:
+                      last_error = error
+                      if attempt < 3:
+                          time.sleep(2 ** attempt)
+
+              raise SystemExit(
+                  f"{label} health check failed after 3 attempts: "
+                  f"{type(last_error).__name__}: {last_error}"
+              )
+
+          for label, base_url, expected in checks:
+              check_health(label, base_url, expected)
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Production runtime monitoring\n\n")
+              summary.write("- Submission Ingress `/health`: PASS\n")
+              summary.write("- Operations API `/health`: PASS\n")
+              summary.write("- Cloudflare Access service authentication: PASS\n")
+              summary.write("- D1/Queue/Workflow mutation: none\n")
+          PY
+
+      - name: Confirm read-only monitoring scope
+        shell: bash
+        run: |
+          echo "Production runtime endpoint monitoring completed."
+          echo "No D1 write commands were executed."
+          echo "No Queue or Workflow messages were submitted."
+          echo "No production resume or applicant data was used."
