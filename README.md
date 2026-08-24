@@ -90,6 +90,8 @@ Responsibility boundary:
 
 ## Confirmed schema groups / 已确认分组
 
+Centralized active group-design documentation: [docs/schema-groups/README.md](docs/schema-groups/README.md).
+
 | Group | Scope | Tables |
 |---|---|---:|
 | G01 | Shared reference and talent taxonomy | 21 |
