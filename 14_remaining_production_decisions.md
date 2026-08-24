@@ -557,3 +557,24 @@ Budget Alert。由于当前账户界面没有提供可用的 Workers/Queues
 - 没有使用 `Re-run failed jobs`，因为该操作会保留原运行的 `simulate_failure=true` 输入并再次产生预期失败。
 
 结论：生产运行时监控的安全失败、通知送达和恢复到绿色状态已经通过验收。真实服务中断、自动化故障处置和生产回滚演练仍属于独立的后续工作。
+
+## Production Operations API 回滚与前向恢复验收（2026-08-23）
+
+状态：**COMPLETE — Operations API 受保护回滚及前向恢复路径已通过验收。**
+
+以下证据时间为 UTC 2026-08-24：
+
+- 受保护回滚 run `#1` 成功，将 Operations API 流量切换到已固定的
+  known-good version `3ef7a9c7-93b3-4125-bed7-15cc60fcdd11`。
+- 回滚后的 production runtime monitoring run `#15` 成功，Ingress、
+  Operations API 与 Cloudflare Access 检查全部通过。
+- 受保护前向恢复 run `#2` 成功，将流量恢复到
+  `3b424f14-1383-43a0-b207-ec2cfb993281`。
+- 恢复后的 production runtime monitoring run `#16` 成功。
+- 最终 deployment `eb8b4d2e-cc9e-4bc1-83a2-65878403dc10` 将 100% 流量
+  指向前向恢复版本。
+- 两次流量变更均经过 production Environment 人工审批。
+- 本验收没有修改 D1、Queue、Workflow、申请人或简历数据。
+
+该结论仅覆盖 production Operations API Worker。Submission Ingress、ETL
+Orchestrator 以及 D1 Time Travel 的恢复程序仍应分别管理和验证。
