@@ -1,0 +1,220 @@
+name: Roll back or restore production Operations API
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Select the fixed production traffic transition
+        required: true
+        type: choice
+        options:
+          - rollback-known-good
+          - restore-forward
+      confirmation:
+        description: Type the exact confirmation text shown in the runbook
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-operations-rollback
+  cancel-in-progress: false
+
+env:
+  WORKER_NAME: hirebeat-operations-api-prod-v1
+  KNOWN_GOOD_VERSION: 3ef7a9c7-93b3-4125-bed7-15cc60fcdd11
+  FORWARD_VERSION: 3b424f14-1383-43a0-b207-ec2cfb993281
+
+jobs:
+  validate-request:
+    name: Validate fixed rollback request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main and exact confirmation
+        env:
+          OPERATION: ${{ inputs.operation }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production rollback is restricted to main."
+            exit 1
+          fi
+
+          case "$OPERATION" in
+            rollback-known-good)
+              EXPECTED="ROLLBACK PRODUCTION OPERATIONS"
+              ;;
+            restore-forward)
+              EXPECTED="RESTORE PRODUCTION OPERATIONS"
+              ;;
+            *)
+              echo "Unsupported operation: $OPERATION"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$CONFIRMATION" != "$EXPECTED" ]]; then
+            echo "Confirmation text did not match the selected operation."
+            exit 1
+          fi
+
+  change-production-traffic:
+    name: Change production Operations API traffic
+    needs: validate-request
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      OPERATION: ${{ inputs.operation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Resolve the fixed transition plan
+        run: |
+          set -euo pipefail
+
+          case "$OPERATION" in
+            rollback-known-good)
+              EXPECTED_CURRENT="$FORWARD_VERSION"
+              TARGET_VERSION="$KNOWN_GOOD_VERSION"
+              EXPECTED_CONFIRMATION="ROLLBACK PRODUCTION OPERATIONS"
+              TRANSITION_LABEL="rollback to reviewed known-good version"
+              ;;
+            restore-forward)
+              EXPECTED_CURRENT="$KNOWN_GOOD_VERSION"
+              TARGET_VERSION="$FORWARD_VERSION"
+              EXPECTED_CONFIRMATION="RESTORE PRODUCTION OPERATIONS"
+              TRANSITION_LABEL="restore reviewed forward version"
+              ;;
+            *)
+              echo "Unsupported operation: $OPERATION"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$CONFIRMATION" != "$EXPECTED_CONFIRMATION" ]]; then
+            echo "Confirmation text did not match the selected operation."
+            exit 1
+          fi
+
+          {
+            echo "EXPECTED_CURRENT=$EXPECTED_CURRENT"
+            echo "TARGET_VERSION=$TARGET_VERSION"
+            echo "TRANSITION_LABEL=$TRANSITION_LABEL"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate protected credentials
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "Missing production Environment secret: CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "Missing production Environment secret: CLOUDFLARE_WORKERS_API_TOKEN"
+            exit 1
+          fi
+
+      - name: Verify the current 100 percent deployment
+        run: |
+          set -euo pipefail
+
+          DEPLOYMENTS_FILE="$(mktemp)"
+          trap 'rm -f "$DEPLOYMENTS_FILE"' EXIT
+
+          npx wrangler deployments list \
+            --name "$WORKER_NAME" \
+            --json > "$DEPLOYMENTS_FILE"
+
+          CURRENT_VERSION="$(
+            jq -er '
+              max_by(.created_on)
+              | (.versions // [])
+              | map(select((.percentage | tonumber) == 100))
+              | if length == 1 and .[0].version_id then
+                  .[0].version_id
+                else
+                  error("latest deployment does not have exactly one 100 percent version")
+                end
+            ' "$DEPLOYMENTS_FILE"
+          )"
+
+          if [[ "$CURRENT_VERSION" != "$EXPECTED_CURRENT" ]]; then
+            echo "Refusing traffic change from unexpected active version."
+            echo "Expected: $EXPECTED_CURRENT"
+            echo "Actual:   $CURRENT_VERSION"
+            exit 1
+          fi
+
+          echo "Pre-change active version verified: $CURRENT_VERSION"
+
+      - name: Apply the fixed production traffic transition
+        run: |
+          set -euo pipefail
+
+          printf 'y\n' | npx wrangler rollback "$TARGET_VERSION" \
+            --name "$WORKER_NAME" \
+            --message "Protected production Operations API: $TRANSITION_LABEL from ${GITHUB_SHA}"
+
+      - name: Verify the target version owns 100 percent traffic
+        run: |
+          set -euo pipefail
+
+          DEPLOYMENTS_FILE="$(mktemp)"
+          trap 'rm -f "$DEPLOYMENTS_FILE"' EXIT
+
+          for attempt in {1..12}; do
+            npx wrangler deployments list \
+              --name "$WORKER_NAME" \
+              --json > "$DEPLOYMENTS_FILE"
+
+            ACTIVE_VERSION="$(
+              jq -er '
+                max_by(.created_on)
+                | (.versions // [])
+                | map(select((.percentage | tonumber) == 100))
+                | if length == 1 and .[0].version_id then
+                    .[0].version_id
+                  else
+                    error("latest deployment does not have exactly one 100 percent version")
+                  end
+              ' "$DEPLOYMENTS_FILE"
+            )"
+
+            if [[ "$ACTIVE_VERSION" == "$TARGET_VERSION" ]]; then
+              echo "Production traffic verification: PASS"
+              echo "Active version: $ACTIVE_VERSION"
+              exit 0
+            fi
+
+            echo "Attempt $attempt: active version is $ACTIVE_VERSION; waiting for $TARGET_VERSION"
+            sleep 5
+          done
+
+          echo "Production traffic did not converge to the fixed target version."
+          exit 1
+
+      - name: Confirm rollback-validation scope
+        if: always()
+        run: |
+          echo "No D1 write command was executed by this workflow."
+          echo "No Queue or Workflow message was submitted."
+          echo "Only the fixed Operations API Worker versions are accepted."
