@@ -437,3 +437,273 @@ Secret 不可读回；修改前必须从公司密码库取得当前受控副本�
 - 不在 PR、README、截图、聊天或 shell history 中写真实 Secret。
 - 不在新接手人验证之前删除最后一个 Owner/Administrator。
 - 不把“能够登录”当成交接完成；必须完成实际任务、拒绝测试、恢复测试和离职回收测试。
+
+## Google Apps Script Installable Trigger 换主 SOP
+
+状态：**DEFERRED — 在公司控制的 Google Workspace 账号准备完成后执行。**
+
+### 目的
+
+Production Google Form 绑定的 Apps Script 使用两个 installable triggers：
+
+| 函数 | 触发器 | 作用 |
+| --- | --- | --- |
+| `onHireBeatFormSubmit` | From form → On form submit | 把 production Google Form 的申请投递给受 Cloudflare Access 保护的 Submission Ingress |
+| `syncHireBeatCatalogOptions` | Time-driven → Minutes timer → Every 5 minutes | 把最新已发布的 Catalog Revision 同步到 production Google Form 的 Position 选项 |
+
+Installable Trigger 以创建该触发器的 Google 账号身份运行。共享 Apps Script 项目不会自动转移触发器所有权；接手公司账号必须创建自己的触发器，原创建者必须使用原账号删除旧触发器。
+
+### 安全原则
+
+1. 使用公司控制的 Google Workspace 账号，不使用接手人的私人 Gmail。
+2. 使用现有 production Google Form 和它绑定的 Apps Script；不得复制 staging Form 作为 production。
+3. 不把 Script Property 的 secret value 写入 Git、文档、截图或聊天。
+4. 不允许个人账号触发器和公司账号触发器长期同时启用，否则同一表单提交可能被处理两次。
+5. 换主过程中先暂停 Google Form 接收响应。
+6. 新账号验证成功后才删除旧触发器。
+7. 如果验证失败，保持表单暂停并执行回退，不允许带故障继续接收真实申请。
+
+### 阶段 1：准备公司账号
+
+准备公司控制的 Google Workspace 账号，例如：
+
+`operations@company-domain.com`
+
+公司应能够执行账号恢复、密码重置、MFA 恢复和人员离职接管。
+
+为该账号授予以下资源的 Editor 或经过审批的管理权限：
+
+- `HireBeat Production Application Form`
+- `HireBeat Production Application Responses`
+- `HireBeat Production Application Form (File responses)`
+- production Form 绑定的 Apps Script 项目
+- `HireBeat Production` Drive 目录及必要子目录
+
+确认公司账号可以：
+
+- 编辑表单；
+- 查看 Responses Sheet；
+- 查看 File responses 文件夹；
+- 打开绑定的 Apps Script；
+- 查看但不公开 Script Properties；
+- 创建 Apps Script installable triggers。
+
+### 阶段 2：记录切换前基线
+
+使用当前个人触发器所有者账号打开：
+
+`Production Google Form → Apps Script → Triggers`
+
+记录以下内容，但不要记录 secret value：
+
+- `onHireBeatFormSubmit`
+  - Deployment：`Head`
+  - Event source：`From form`
+  - Event type：`On form submit`
+  - Error rate
+  - Last run
+- `syncHireBeatCatalogOptions`
+  - Deployment：`Head`
+  - Event source：`Time-driven`
+  - Timer：`Minutes timer`
+  - Interval：`Every 5 minutes`
+  - Error rate
+  - Last run
+
+确认当前生产表单、Responses Sheet 和上传目录均可用。
+
+### 阶段 3：暂停生产表单
+
+在 production Google Form 中：
+
+1. 打开 `Responses`。
+2. 关闭 `Accepting responses`。
+3. 设置维护提示，例如：
+
+   `The application form is temporarily unavailable during a controlled operations update. Please try again shortly.`
+
+4. 确认公开表单暂时不能提交。
+
+暂停期间不得删除历史 Responses、上传文件、R2 对象或 D1 数据。
+
+### 阶段 4：公司账号完成 Apps Script 授权
+
+使用无痕窗口或独立浏览器 Profile 登录公司账号。
+
+1. 打开同一个 `HireBeat Production Application Form`。
+2. 进入 `Apps Script`。
+3. 确认项目名称和代码与 production 项目一致。
+4. 进入 `Project Settings`。
+5. 只核对以下 Script Property 名称存在，不复制或展示 value：
+
+   - `HIREBEAT_INGRESS_BASE_URL`
+   - `HIREBEAT_INGRESS_INTERNAL_AUTH_TOKEN`
+   - `HIREBEAT_OPERATIONS_BASE_URL`
+   - `HIREBEAT_CF_ACCESS_CLIENT_ID`
+   - `HIREBEAT_CF_ACCESS_CLIENT_SECRET`
+   - `HIREBEAT_LATEST_CATALOG_REVISION`
+   - `HIREBEAT_LATEST_CATALOG_SNAPSHOT_SHA256`
+   - `HIREBEAT_LATEST_CATALOG_SYNCED_AT`
+
+6. 回到 Editor。
+7. 选择 `syncHireBeatCatalogOptions`。
+8. 点击 `Run`。
+9. 使用公司账号完成 Google OAuth 授权。
+10. 在 `Executions` 中确认此次执行为 `Completed`。
+11. 打开 production Form，确认 Position 选项仍符合已发布的 Company → Work Mode → Position Catalog。
+
+不要在 Editor 中手动运行 `onHireBeatFormSubmit`，因为该函数需要真实的 Form Submit event object。
+
+### 阶段 5：公司账号创建新触发器
+
+仍使用公司账号进入：
+
+`Apps Script → Triggers → Add Trigger`
+
+创建第一个触发器：
+
+| 设置 | 值 |
+| --- | --- |
+| Choose which function to run | `onHireBeatFormSubmit` |
+| Choose which deployment should run | `Head` |
+| Select event source | `From form` |
+| Select event type | `On form submit` |
+| Failure notification settings | `Notify me immediately` |
+
+保存并完成授权。
+
+创建第二个触发器：
+
+| 设置 | 值 |
+| --- | --- |
+| Choose which function to run | `syncHireBeatCatalogOptions` |
+| Choose which deployment should run | `Head` |
+| Select event source | `Time-driven` |
+| Select type of time based trigger | `Minutes timer` |
+| Select minute interval | `Every 5 minutes` |
+| Failure notification settings | `Notify me immediately` |
+
+保存并完成授权。
+
+公司账号的 Triggers 页面应显示恰好两个目标触发器。
+
+### 阶段 6：删除个人账号旧触发器
+
+此时 production Form 仍必须暂停接收响应。
+
+1. 退出公司账号或切换到原个人触发器所有者账号。
+2. 打开同一个 Apps Script 项目。
+3. 进入 `Triggers`。
+4. 删除个人账号创建的：
+   - `onHireBeatFormSubmit`
+   - `syncHireBeatCatalogOptions`
+5. 不删除 Apps Script 代码。
+6. 不删除 Script Properties。
+7. 不删除表单、Response Sheet 或上传目录。
+8. 再次确认个人账号的 Triggers 页面不再显示这两个触发器。
+9. 使用公司账号确认其两个新触发器仍然存在。
+
+禁止同时保留两套 `onHireBeatFormSubmit` 触发器。
+
+### 阶段 7：重新开放表单
+
+确认新触发器存在且旧触发器已删除后：
+
+1. 打开 production Google Form。
+2. 进入 `Responses`。
+3. 开启 `Accepting responses`。
+4. 检查表单公开链接可以打开。
+5. 检查 Position 列表来自当前 Catalog Revision。
+
+### 阶段 8：最小 synthetic 换主验收
+
+旧 staging 验收可以继续作为通用管道功能证据，但不能替代本次身份切换验收。
+
+提交一条新的、明确标记的 synthetic 申请：
+
+- Student/Applicant Name：
+  `SYNTHETIC TRIGGER OWNER CUTOVER YYYY-MM-DD`
+- Contact Email：
+  使用专门测试邮箱或明确的 synthetic 地址
+- Position：
+  选择当前已发布的 production Catalog Position
+- Resume：
+  仅上传无真实个人信息的 synthetic PDF
+- 其他字段：
+  使用明确的测试值，不得包含真实候选人信息
+
+依次验证：
+
+1. Google Form 显示提交成功。
+2. Responses Sheet 只新增一行。
+3. Apps Script `Executions` 中只有一次对应的 `onHireBeatFormSubmit` 成功执行。
+4. 该执行属于公司账号创建的新触发器。
+5. Submission Ingress 返回成功响应。
+6. Cloudflare Ingress Observability 出现对应成功调用。
+7. production Intake Queue 消息被消费。
+8. production Intake DLQ 没有新增未确认消息。
+9. production R2 出现对应 synthetic resume/replay 对象。
+10. D1 中形成一套且仅一套对应的 Submission、Resume、Application 和后续运行记录。
+11. Parser、Normalization、Dedup、Workflow 和 ML 路径按当前设计完成。
+12. 如果验收范围包括 Offer，则确认测试记录到达预期 Offer 状态。
+13. `pragma_foreign_key_check` 返回 0。
+14. 没有重复 Application、重复 Resume 或重复 Queue 消费。
+
+保留以下非敏感证据：
+
+- 测试提交时间；
+- synthetic correlation/submission UUID；
+- Apps Script execution status；
+- Queue/DLQ 检查结果；
+- D1 行数或对象标识；
+- R2 object key；
+- 最终阶段；
+- 验收结论。
+
+不得保存：
+
+- Access Client Secret；
+- 内部认证 Token；
+- Service Account JSON；
+- 真实简历；
+- 真实候选人个人信息。
+
+### 阶段 9：失败回退
+
+如果公司账号触发器创建或 synthetic 验收失败：
+
+1. 立即关闭 `Accepting responses`。
+2. 不删除失败执行和审计证据。
+3. 检查公司账号对 Form、Sheet、Drive、Apps Script 的权限。
+4. 检查 OAuth 授权是否完成。
+5. 检查 Script Property 名称是否完整。
+6. 检查 Cloudflare Access Service Token 是否有效。
+7. 检查内部 Ingress Token 是否与 Worker 配置一致。
+8. 修复后重新运行 `syncHireBeatCatalogOptions`。
+9. 重新执行一条新的 synthetic 测试。
+10. 如果无法及时修复，由原个人账号临时重新创建原两个触发器。
+11. 回退时也只能保留一套 `onHireBeatFormSubmit` 触发器。
+12. 恢复成功后重新开放表单。
+
+### 阶段 10：完成交接
+
+只有以下项目全部通过，才能把换主标记为完成：
+
+- 公司账号持有 Form、Sheet、上传目录和 Apps Script 的必要权限；
+- 公司账号创建的两个触发器均存在；
+- 个人账号旧触发器均已删除；
+- Catalog 定时同步正常；
+- synthetic Form Submit 正常；
+- Ingress、Queue、R2、D1、Parser、ML 和 Workflow 验证通过；
+- 没有重复处理；
+- 通知可以发送到公司控制的邮箱；
+- 公司具备账号恢复和 MFA 恢复能力；
+- 证据已写入 production readiness/handover 记录。
+
+完成后再根据批准的交接计划：
+
+1. 轮换曾由个人账号接触过的 Service Token 和内部认证 Token。
+2. 同时更新 Cloudflare/GitHub/Apps Script 中对应凭据。
+3. 运行 production runtime monitor。
+4. 降低或移除个人账号权限。
+5. 将本事项从 `DEFERRED` 更新为 `COMPLETE`。
