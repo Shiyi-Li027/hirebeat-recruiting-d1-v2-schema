@@ -747,3 +747,55 @@ Production 运行时监控由
 ### 安全边界
 
 该验收只验证监控失败检测、GitHub 通知和恢复流程，不会故意破坏生产 Worker、D1、Queue、Workflow、Parser、ML 或真实申请数据。真实故障注入和生产回滚验证必须另行审批。
+
+## Production Operations API 回滚与前向恢复运行手册及证据（2026-08-23）
+
+### 已验证版本
+
+- Worker：`hirebeat-operations-api-prod-v1`
+- 已知正常回滚版本：
+  `3ef7a9c7-93b3-4125-bed7-15cc60fcdd11`
+- 前向恢复版本：
+  `3b424f14-1383-43a0-b207-ec2cfb993281`
+- 禁止作为日常回滚目标的 bootstrap 版本：
+  `5261e449-0796-4499-a5ac-73c9da05e527`
+
+### 受控回滚操作
+
+1. 首先运行 `Monitor production runtime endpoints`，保留回滚前状态证据。
+2. 打开 GitHub Actions 中的
+   `Roll back or restore production Operations API`。
+3. 选择 workflow 中的 rollback 操作。
+4. 输入页面要求的精确确认文本。
+5. 提交后，在 `production` Environment 审批页面核对目标版本和操作原因。
+6. 审批并等待 workflow 成功完成。
+7. 立即重新运行 runtime monitoring，确认 Ingress、Operations API 和
+   Cloudflare Access 均为 PASS。
+8. 不要把一次成功回滚当作最终状态；确认是否需要执行前向恢复。
+
+### 前向恢复操作
+
+1. 再次打开同一个受保护 workflow。
+2. 选择 forward-restoration 操作。
+3. 输入页面要求的精确确认文本。
+4. 在 production Environment 中确认目标为
+   `3b424f14-1383-43a0-b207-ec2cfb993281`。
+5. 审批并等待 workflow 成功完成。
+6. 再次运行 runtime monitoring。
+7. 使用 `wrangler deployments list` 确认最终版本获得 100% 流量。
+
+### 本次验收证据
+
+- 回滚 run `#1` / ID `32681414030`：成功。
+- 回滚后监控 run `#15`：成功。
+- 前向恢复 run `#2` / ID `32681730509`：成功。
+- 恢复后监控 run `#16` / ID `32681834676`：成功。
+- 最终 deployment：
+  `eb8b4d2e-cc9e-4bc1-83a2-65878403dc10`。
+- 最终 active version：
+  `3b424f14-1383-43a0-b207-ec2cfb993281`，traffic `100%`。
+- `/health` 返回 `status=running`、`stage=production`。
+- workflow 不执行 D1、Queue 或 Workflow mutation。
+
+GitHub Actions 中出现的 Node.js 20 deprecation annotation 是非阻塞维护告警，
+不影响本次回滚结果；后续应随官方 Action runtime 升级单独处理。

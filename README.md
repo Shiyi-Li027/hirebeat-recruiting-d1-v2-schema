@@ -547,3 +547,23 @@ The protected production runtime monitor passed a controlled failure-and-recover
 - Neither run deployed code, wrote D1, submitted Queue or Workflow messages, or used production applicant or resume data.
 
 This proves that the monitor can surface a controlled failure, deliver notifications, and return to green. It does not replace a later real-outage or rollback drill.
+
+## Production Operations API rollback and forward-restoration evidence (2026-08-23)
+
+The protected production Operations API rollback path has passed controlled
+validation. Evidence timestamps below are recorded in UTC on 2026-08-24.
+
+- Rollback workflow run `#1` succeeded from `main`:
+  https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32681414030
+- Traffic was rolled back to the pinned known-good version
+  `3ef7a9c7-93b3-4125-bed7-15cc60fcdd11`.
+- Runtime monitoring run `#15` passed after rollback.
+- Forward-restoration workflow run `#2` succeeded from `main`:
+  https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32681730509
+- Traffic was restored to version
+  `3b424f14-1383-43a0-b207-ec2cfb993281`.
+- Runtime monitoring run `#16` passed after restoration.
+- Final deployment `eb8b4d2e-cc9e-4bc1-83a2-65878403dc10` assigns 100% of
+  production Operations API traffic to the forward-restoration version.
+- Both traffic changes required production Environment approval.
+- The rollback workflow performs no D1, Queue, or Workflow mutation.
