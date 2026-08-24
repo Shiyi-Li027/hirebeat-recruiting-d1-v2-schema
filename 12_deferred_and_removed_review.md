@@ -27,9 +27,9 @@
 | `ml_profile_cluster_result` | 单条实时流程不使用 KMeans/PCA 决策 | 出现冻结 cohort 的离线群体分析，并验证真实业务价值 |
 | `ml_scorecard_result` | 原主观 Scorecard 未参与最终决定且缺少验证 | 权重经招聘方、标签、人工评估和公平性验证后恢复 |
 
-### 已退出 deferred、等待下一条 migration
+### 已退出 deferred、已通过 migration 实现
 
-`system_configuration_release` 与 `system_configuration` 已确认为生产 Ingress/Workflow 上线前需要的 G04 控制平面表。首版采用最小必要 `NOT NULL`，不创建 `environment_name`、`value_type` 或 `is_sensitive`；Secret 继续只存 Cloudflare Secrets。已确认使用 partial unique index 保证最多一个 active release。该决定不修改已部署的 `0001`/`0002`，而通过新的有序 migration 实现。
+`system_configuration_release` 与 `system_configuration` 已作为生产 Ingress/Workflow 所需的 G04 控制平面表，通过 `0003_add_versioned_system_configuration.sql` 进入当前 84 表 Schema。实现采用最小必要 `NOT NULL`，不创建 `environment_name`、`value_type` 或 `is_sensitive`；Secret 继续只存 Cloudflare Secrets。Partial unique index 保证最多一个 active release。该变更没有改写已部署的 `0001`/`0002`。
 
 与 G12 同时记录、但不是当前表名的 deferred 字段能力：
 

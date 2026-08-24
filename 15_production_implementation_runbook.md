@@ -214,7 +214,7 @@ python3 -m pip install -r services/resume-parser/requirements-dev.txt
 PYTHONPATH=services/resume-parser python3 -m pytest -q services/resume-parser/test
 ```
 
-The staging migrations, runtime deployment, synthetic end-to-end acceptance, and Google Form provider-native submission path have completed successfully. The next deployment phase is production preparation. Production must use separate D1, R2, Queues/DLQ, Workers, Workflows, private Parser/ML services, service URLs, custom domains, Access configuration and Secrets. Staging resources must never be rebound or reused as production resources.
+Staging and production migrations, runtime deployments, synthetic end-to-end acceptance, and the Google Form provider-native submission path have completed successfully. Production uses separate D1, R2, Queues/DLQ, Workers, Workflows, private Parser/ML services, Access configuration and Secrets. The temporary Access-protected `workers.dev` Operations route is the documented no-domain exception; staging resources must never be rebound or reused as production resources.
 
 ## 7. Provider-native channel status
 
@@ -419,40 +419,41 @@ Status: **PASS for the minimum non-mutating production runtime smoke scope**.
 - No production resume or applicant data was used.
 
 This evidence confirms the configured private production service URLs,
-authentication path, reachability and minimum response contracts. It does not
-replace provider-path end-to-end acceptance, failure-path monitoring, alerting
-or rollback validation.
+authentication path, reachability and minimum response contracts. Provider-path
+end-to-end acceptance, controlled monitoring failure/notification/recovery and
+Operations API rollback/forward restoration were completed afterward.
 
-## 14. Production deployment prerequisites
+## 14. Production deployment closeout and deferred follow-up
 
-The following items remain required before production enablement:
+The original pre-enable checklist is now closed for runtime and operational
+readiness. Continue to enforce these operating and deferred-handover boundaries:
 
 - Maintain the already isolated production D1, R2, Queues/DLQ, Workers,
   Workflows and Operations API without rebinding any staging resource.
-- The minimum non-mutating production Parser/ML runtime smoke test has passed.
-  Complete provider-path end-to-end acceptance, failure-path monitoring,
-  alerting and rollback validation before enabling production business traffic.
+- The minimum non-mutating production Parser/ML runtime smoke, provider-path
+  end-to-end acceptance, runtime monitoring, controlled failure notification and
+  Operations API rollback/forward restoration have passed.
 - The administrator-only Operations API currently uses an Access-protected
   `workers.dev` route as the reviewed temporary no-domain solution. Move it to
   a company-owned custom domain when available, then revalidate its Access
   destination, AUD, exact-email Allow policy and unauthorized-user denial.
 - Continue requiring the protected GitHub production Environment and reviewer
   approval for every later production migration and deployment.
-- Configure production-only Google Form provider identifiers, Ingress
-  credentials and Cloudflare Access service credentials; do not reuse staging
-  tokens or Secrets.
+- Production-only Google Form provider identifiers, Ingress credentials and
+  Cloudflare Access service credentials are configured; do not reuse staging
+  tokens or Secrets in later rotations.
 - The implemented `catalog_sync_run` / `catalog_sync_target_run`
   result-reporting path has passed a real Google Form Catalog Sync in staging.
   Add an automatic retry dispatcher before relying on `failed_retryable`
   recovery in production.
-- Import an explicitly reviewed production Reference/Catalog seed instead of
-  copying unreviewed staging runtime data.
+- The minimum production Catalog write acceptance passed through the Operations
+  API. Initial bulk Reference/Catalog CSV import remains deferred; never replace
+  it with direct D1 writes or copied staging runtime data.
 - Rotate or replace every credential that has appeared in an attachment,
   screenshot, terminal transcript or chat record.
 
-These values and resources cannot be safely invented in source code. Their
-absence must block production enablement, not weaken authentication, reuse
-staging infrastructure or silently apply defaults.
+Future changes must not weaken authentication, reuse staging infrastructure or
+silently apply defaults.
 
 ## Production Google Form provider end-to-end acceptance evidence
 
@@ -495,48 +496,7 @@ The verified production path was:
 
 ### Scope boundary
 
-This acceptance proves the minimum controlled synthetic provider path only. It does not authorize broad real-applicant traffic or declare the complete production launch finished. Monitoring and alerting, explicit failure-path acceptance, rollback validation, operational ownership and business launch approval remain separate prerequisites.
-
-## Production Google Form provider end-to-end acceptance evidence
-
-Status: **PASS — controlled synthetic production acceptance on 2026-08-22**.
-
-Validated path:
-
-`Google Form -> Apps Script -> Access-protected Submission Ingress -> D1/R2 -> Intake Queue -> Workflows -> Parser/ML`
-
-Observed evidence:
-
-- three synthetic submissions were sent through the production Google Form;
-- the installed Apps Script `onHireBeatFormSubmit` trigger completed for the submissions;
-- the linked production Form response sheet contains three response rows;
-- production R2 contains three UUID directories under `raw-resumes/v1` and three under `intake-replay-envelopes/v1`;
-- the production Intake Queue ingested and acknowledged three messages, retried zero messages, and returned to zero backlog;
-- observed average Queue consumer lag was approximately 4.13 seconds;
-- the production Intake DLQ reported no unacknowledged messages;
-- the production D1 foreign-key check returned zero violations.
-
-Production D1 counts observed after acceptance:
-
-| Table / check | Count |
-| --- | ---: |
-| `raw_submission` | 3 |
-| `raw_submission_resume` | 3 |
-| `raw_submission_intake_run` | 3 |
-| `submission_dedup_run` | 3 |
-| `normalization_run` | 3 |
-| `etl_workflow_run` | 6 |
-| `etl_step_run` | 30 |
-| `person` | 2 |
-| `application` | 3 |
-| `application_stage_run` | 9 |
-| `ml_analysis_run` | 3 |
-| `offer` | 0 |
-| `audit_event` | 7 |
-| `outbox_event` | 36 |
-| foreign-key violations | 0 |
-
-The `person = 2` and `application = 3` result is consistent with the synthetic identity-deduplication scenario. This acceptance used controlled synthetic data only. It is not approval for broad real-applicant traffic; monitoring and alerting, failure-path validation, rollback validation, operational ownership and final launch approval remain pending.
+These counts are the retained snapshot from the initial three-submission acceptance; `offer = 0` in that snapshot does not contradict the later closeout evidence that a synthetic provider flow reached Offer processing. This acceptance does not authorize unrestricted real-applicant traffic. Monitoring, controlled notification failure/recovery, Operations API rollback/forward restoration and final readiness audit were completed afterward.
 
 ## Production Google Form Catalog 日常同步操作
 
@@ -588,39 +548,6 @@ The `person = 2` and `application = 3` result is consistent with the synthetic i
 - 不要在发布 Catalog Revision 之前同步草稿数据。
 - 不要把 0–5 分钟目标延迟描述为可用性 SLA。
 
-## Production Worker observability verification (2026-08-23)
-
-Status: **PASS for persisted invocation logging**. This verification confirms that production Worker invocations reach the Cloudflare observability dashboard; it does not complete proactive alerting, deliberate failure-path monitoring, or rollback validation.
-
-### Deployment evidence
-
-- PR #24, `Enable production Worker observability`, was merged to `main` at commit `871b93a`.
-- `Deploy production Workers` run `#4` stopped during preflight because the confirmation text was not the exact required value `DEPLOY PRODUCTION WORKERS`; the deployment job did not run.
-- Protected run `#5` used the exact confirmation, received `production` Environment approval, and successfully redeployed Submission Ingress and ETL Orchestrator.
-- Both generated production configurations contain:
-
-  ```toml
-  [observability.logs]
-  enabled = true
-  invocation_logs = true
-  ```
-
-### Runtime verification
-
-- Submission Ingress was called through the Access-protected production route at `GET /health`.
-- The response was HTTP 200 and identified `hirebeat-submission-ingress`, version `1.0.0-production-ingress`, `status=running`, `deploymentStage=production`, and `writesEnabled=true`.
-- Cloudflare Observability recorded the request as one successful invocation with zero errors.
-- ETL Orchestrator recorded its scheduled cron `*/1 * * * *` invocation with outcome `ok`, one success, and zero errors.
-- The health verification did not issue a D1 write command and did not submit a Queue or Workflow message.
-
-### Post-verification state
-
-- The temporary Apps Script function `verifyProductionIngressObservability()` was deleted after the event appeared in Cloudflare.
-- The production Google Form keeps its two operational triggers unchanged:
-  - `onHireBeatFormSubmit`: form-submit provider processing.
-  - `syncHireBeatCatalogOptions`: five-minute Catalog synchronization.
-- Remaining production-readiness work includes proactive alert rules, controlled failure-path monitoring, and a reviewed rollback exercise.
-
 ## Production Worker observability evidence (2026-08-23)
 
 Status: **PASS for persisted invocation logging and basic runtime visibility**.
@@ -653,7 +580,7 @@ Status: **PASS for persisted invocation logging and basic runtime visibility**.
 
 ### Scope and remaining work
 
-The health verification made no D1 writes and submitted no Queue or Workflow messages. Proactive alerts, controlled failure-path monitoring, and rollback validation remain separate follow-up milestones.
+The health verification made no D1 writes and submitted no Queue or Workflow messages. Controlled monitoring failure/notification/recovery and Operations API rollback/forward restoration were completed afterward; a real-outage drill remains optional follow-up rather than a readiness blocker.
 
 ## Production 定时运行时监控运行手册与证据（2026-08-23）
 

@@ -58,7 +58,7 @@ Company 没有 active Work Mode 时允许退化为 Company → Position。`posit
 
 ## 3. G12 / G99 结论
 
-- 11 张 deferred 表不进入首版 Schema；满足明确触发条件后单独 migration。
+- 10 张 deferred 表不进入当前 Schema；满足明确触发条件后单独 migration。
 - 22 张 removed 表不进入首版 Schema；不能未经重新设计直接恢复旧定义。
 - Deferred 和 Removed 都不会被任何首版 importer/Workflow 写入。
 - 测试 CSV 不创建假记录来模拟未启用能力。
@@ -70,10 +70,10 @@ Company 没有 active Work Mode 时允许退化为 Company → Position。`posit
 按正式依赖顺序在全新 SQLite 内存库执行 G01–G11 当前 SQL：
 
 ```text
-schema files executed:                11
+schema group boundaries validated:    11
 actual current tables:                84
 inventory current tables:             84
-explicit indexes:                     118
+explicit indexes at this audit:       118
 inventory tables missing from schema: 0
 schema tables missing from inventory: 0
 foreign-key parent-key errors:         0
@@ -94,9 +94,11 @@ total inventory:  116
 
 Inventory 中已经没有 `draft` 或 `proposed` 表。
 
-## 6. 仍未执行的下一阶段工作
+## 6. 审计时尚未执行、现已完成的后续工作
 
-“Group 已确认”表示表、字段、约束和业务边界可以进入最终 Schema；不表示生产部署已经完成。后续仍需要：
+以下清单是 2026-08-17 结构审计时记录的后续工作，作为历史范围证据保留；它不再表示当前 pending。此后单文件 Schema、14 个 migrations、Reference/Stage seed、D1 local/staging/production 验证、Workflow A/B、Ingress、Catalog/Offer command、幂等与端到端验收均已完成。当前完整 migration set 的验证结果为 84 张业务表、120 个显式索引和 0 个外键违规。
+
+当时的后续清单：
 
 1. 按依赖顺序组装一份正式、单文件、无重复表的 `CREATE.sql`；
 2. 把 reference seed 与 13 个 Pipeline Stage seed 作为可重复运行的 seed/migration 管理；
@@ -107,6 +109,6 @@ Inventory 中已经没有 `draft` 或 `proposed` 表。
 7. 使用 `EXPLAIN QUERY PLAN` 再审核非关键索引，而不是继续无依据增加索引；
 8. 准备空库、第一条 Submission、重复技术投递、合法业务重申、被 supersede 的旧 Workflow、ML no-offer、ML Offer、Offer 状态转换等端到端测试。
 
-## 7. 安全阻断项
+## 7. 凭据安全结论
 
-组员附件中出现过明文 Airtable token 和 Google service-account credential。任何部署前必须撤销/轮换，并迁移到 Cloudflare Secrets。旧凭据不能进入最终 Git repository、Schema、seed、CSV、错误日志或文档示例。
+组员附件中曾出现过明文 Airtable token 和 Google service-account credential；这些旧值不得进入最终 Git repository、Schema、seed、CSV、错误日志或文档示例，也不得重新用于 production。当前 production 使用独立受保护凭据。公司账号交接时，仍必须轮换个人账号曾接触的相关凭据，并在新执行身份完成 synthetic 验收后移除或降低个人权限。

@@ -74,7 +74,7 @@ A private Cloudflare R2 bucket has been provisioned for original resume PDF file
 | D1 object-key column | `resume_r2_object_key` |
 | D1 file-hash column | `resume_file_sha256` |
 | Current infrastructure status | Bucket created and Wrangler binding configured |
-| Current application status | Writing Ingress, Parser, R2, Raw D1 publication, Outbox, Workflow A/B, ML and Operations code implemented and bundle-validated; remote runtime values and Secrets must be configured before deployment |
+| Current application status | Production runtime and operational readiness passed; company-account handover remains documented deferred work |
 
 Responsibility boundary:
 
@@ -186,8 +186,8 @@ The tree below highlights the maintained entry points and is representative rath
 │   ├── generate_constraint_matrix.py
 │   ├── generate_staging_closeout_report.py
 │   └── validate_schema.py
-├── shared_reference/ through offer/
-│   └── logical group design documentation
+├── docs/schema-groups/<group>/
+│   └── current logical group design documentation
 ├── test-exports/
 │   └── read-only inspection contract and ignored local evidence
 ├── 00_master_table_groups.md
@@ -204,7 +204,7 @@ The tree below highlights the maintained entry points and is representative rath
 └── README.md
 ```
 
-The ordered files in `migrations/` are the canonical deployment history and remain immutable after application. `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` is the single canonical complete schema for creating a fresh database. Its G01 through G11 comment boundaries preserve the logical grouping without requiring executable per-group SQL files. The corresponding group directories contain design documentation only.
+The ordered files in `migrations/` are the canonical deployment history and remain immutable after application. `schema/HIREBEAT_D1_CREATE_2026-08-17.sql` is the single canonical complete schema for creating a fresh database. Its G01 through G11 comment boundaries preserve the logical grouping without requiring executable per-group SQL files. The current, active group-design documents live under `docs/schema-groups/<group>/`; they are design references, not legacy or archived material.
 
 `scripts/build_schema_artifacts.py` validates the canonical complete CREATE file and builds derived administrative artifacts. It does not assemble the database schema from separate group fragments. `migrations/0001_initial_schema.sql` remains an immutable historical baseline and is therefore not rewritten to match later schema revisions or updated comment formatting.
 
@@ -229,7 +229,7 @@ npm install
 
 ## Build and validate / 构建与验证
 
-Regenerate the deployable SQL artifacts from the 11 confirmed group modules:
+Regenerate and validate the deployable SQL artifacts from the canonical complete Schema and ordered migrations:
 
 ```bash
 npm run schema:build
@@ -392,7 +392,7 @@ Generated rows are ignored by Git because they can contain candidate PII. Team s
 time-limited GitHub Actions Artifact; only the directory contract, manifest schema, and synthetic or
 explicitly redacted samples may be committed.
 
-## Remaining deployment prerequisites and deferred work / 尚待外部配置与后续增强
+## Deployment status and deferred work / 部署状态与延后事项
 
 - Staging end-to-end acceptance is complete, including the Google Form provider-native submission path. The accepted evidence is recorded in `17_staging_end_to_end_acceptance_plan.md` and the staging closeout report.
 - Airtable provider-native activation is deliberately deferred. It does not block the accepted Google Form staging channel or the current production-infrastructure preparation.
@@ -400,7 +400,7 @@ explicitly redacted samples may be committed.
 - Protected production Worker deployment run #2 deployed the isolated Submission Ingress and ETL Orchestrator from `main` commit `41ac450`, registered the two production Workflows, and connected the production Queue/DLQ topology. Private production Resume Parser and ML services, production service identities, authentication values and Google Drive reader access are configured.
 - Protected production Operations API deployment run `#2` deployed `hirebeat-operations-api-prod-v1` from `main` commit `7cbb3c3` after protected GitHub `production` Environment approval. Cloudflare Access protects the Worker's all-traffic route with the exact-email `Production Operations Admin` policy. Authorized health, Reference, Catalog and time-policy checks passed; unauthenticated and unauthorized access were rejected as expected.
 - Protected production runtime smoke workflow run `#1` executed from `main` commit `7e26c91` and passed both private production Resume Parser and ML service checks using protected GitHub `production` Environment configuration. The run validated runtime configuration and authenticated service calls without D1 writes, Queue/Workflow messages, or production resume/applicant data.
-- Because the Cloudflare account currently has no managed domain, the production Operations API temporarily uses its Access-protected `workers.dev` URL with preview URLs disabled. Production Ingress and ETL Orchestrator remain unavailable on `workers.dev`. Before enabling production business traffic, migrate Operations to a reviewed company-owned custom domain when available, revalidate its Access destination, AUD and allow/deny behavior, complete provider-specific production identifiers and reviewed reference data, and complete provider-path end-to-end acceptance, failure-path monitoring, alerting and rollback verification.
+- Because the Cloudflare account currently has no managed domain, the production Operations API temporarily uses its Access-protected `workers.dev` URL with preview URLs disabled. Production Ingress and ETL Orchestrator remain unavailable on `workers.dev`. The provider-path acceptance, runtime monitoring, controlled notification failure/recovery, and Operations API rollback/forward restoration have passed. Moving the temporary route to a reviewed company-owned custom domain remains a documented non-blocking follow-up.
 - Durable `catalog_sync_run` / `catalog_sync_target_run` result reporting is implemented and has passed a real Google Form Catalog Sync in staging. Before relying on `failed_retryable` recovery in production, add automatic retry dispatch and configure production-only provider credentials and identifiers. Staging resources and Secrets must not be reused.
 - ML model/version expansion, chunked long-text embedding, Position-level work mode, reference-data releases, and external Offer document/e-signature integration remain deliberately deferred.
 
@@ -462,18 +462,6 @@ No open-source license is included. Unless the repository owner adds a license, 
 
 ## Production Google Form provider end-to-end acceptance
 
-Status: **PASS for controlled synthetic production acceptance** (2026-08-22).
-
-The production Google Form provider path has been verified end to end:
-
-`Google Form -> Apps Script provider bridge -> Cloudflare Access-protected Submission Ingress -> D1/R2 -> Intake Queue -> ETL Workflows -> Parser/ML`
-
-Three controlled synthetic submissions completed successfully. Production D1 contains three applications and three ML analysis runs; the Intake Queue acknowledged all three messages without retry and returned to zero backlog; the DLQ has no unacknowledged messages; production R2 contains the raw-resume and replay-envelope objects; and the foreign-key check returned zero violations.
-
-This evidence does not authorize broad real-applicant traffic. Production monitoring and alerting, explicit failure-path acceptance, rollback validation, operational ownership and business launch approval remain separate prerequisites. See `15_production_implementation_runbook.md`.
-
-## Production Google Form provider end-to-end acceptance
-
 Status: **PASS for controlled synthetic production acceptance (2026-08-22)**.
 
 The production provider path has been exercised end to end through:
@@ -489,7 +477,7 @@ Acceptance evidence:
 - production R2 contains the corresponding raw-resume and intake replay-envelope artifacts;
 - `pragma_foreign_key_check` reported zero violations.
 
-This is controlled synthetic acceptance evidence only. It does not authorize broad real-applicant traffic. Production monitoring and alerting, failure-path validation, rollback validation, operational ownership and final launch approval remain required before general production enablement.
+This is controlled synthetic acceptance evidence only. It does not authorize unrestricted real-applicant traffic. Runtime monitoring, controlled notification failure/recovery, rollback validation and the final readiness audit were completed afterward; company-account ownership transfer remains deferred.
 
 ## Production Google Form Catalog synchronization / 生产 Google Form 目录同步
 
@@ -513,7 +501,7 @@ Production Google Form choices consume only the latest published Catalog Revisio
 - An Access-authenticated `GET /health` returned HTTP 200 from production Ingress, and Ingress observability recorded the request (1 success, 0 errors).
 - The temporary Apps Script verification function was removed; `onHireBeatFormSubmit` and the five-minute `syncHireBeatCatalogOptions` trigger remain unchanged.
 - This verification made no D1 writes and submitted no Queue or Workflow messages.
-- Proactive alerts, controlled failure-path monitoring, and rollback validation remain pending.
+- Later controlled monitoring failure/notification/recovery and Operations API rollback/forward-restoration acceptance completed the operational readiness evidence; real-outage drills remain an optional future enhancement.
 
 ## Production scheduled runtime monitoring evidence (2026-08-23)
 
