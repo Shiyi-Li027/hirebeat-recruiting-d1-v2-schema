@@ -20,7 +20,8 @@
 | `migrations/0013_allow_catalog_snapshot_republication.sql` | 允许目录经历 A → B → A 时为相同历史快照哈希创建新的顺序 Revision |
 | `migrations/0014_add_business_timezone_policy.sql` | 发布 UTC 持久化与 `America/New_York` 人工输入/展示策略，并完整继承 v2 运行配置 |
 | `schema/HIREBEAT_D1_DELETE_ALL_2026-08-17.sql` | 危险的手工清库脚本；删除 84 张业务表，不删除 `d1_migrations` 或 D1 内部表 |
-| `scripts/build_schema_artifacts.py` | 从 11 个已确认 group SQL 重新生成最新 CREATE/DELETE SQL，并保护已部署 migration 不被改写 |
+| `docs/schema-groups/<group>/` | 当前有效的 G01–G11 逻辑设计说明；不是 legacy/archive，也不是可执行 SQL 来源 |
+| `scripts/build_schema_artifacts.py` | 校验 canonical complete CREATE 与 ordered migrations，生成派生管理制品，并保护已部署 migration 不被改写 |
 | `scripts/validate_schema.py` | 在内存 SQLite 中验证表、索引和外键 |
 | `wrangler.toml` | Wrangler 与目标 D1 数据库的绑定配置 |
 | `.github/workflows/deploy-d1.yml` | push 到 `main` 后验证并执行远程 D1 migrations |
@@ -46,10 +47,11 @@ local → staging → production
 - `production` 处理真实候选人 PII、正式招聘决定和 Offer，必须使用独立资源及受保护的
   GitHub Environment approval。
 
-当前远程 `hirebeat_recruiting_d1_v2` 和
-`hirebeat-hr-raw-resumes-pdf-r2-v1` 已定义为 staging。端到端验证通过后再创建 production
-资源，不能把 staging binding 复用于 production。生产级指代码、契约、测试、审计和恢复
-达到上线标准，不表示跳过 staging、直接使用真实候选人数据测试。
+远程 `hirebeat_recruiting_d1_v2` 和
+`hirebeat-hr-raw-resumes-pdf-r2-v1` 定义为 staging；隔离的 production D1、R2、Queue/DLQ、
+Workers、Workflows、Parser/ML 与凭据已经创建或部署并通过最终审计。任何后续部署仍不得把
+staging binding 复用于 production。生产验收使用受控 synthetic 数据，不以真实候选人数据
+替代测试。
 
 ## 2.2 检查 CSV 的集中目录
 
@@ -69,7 +71,7 @@ test-exports/<environment>/<YYYY-MM-DD>/<workflow_run_uuid>/
 进入本目录：
 
 ```bash
-cd "/Users/shiyili/Documents/Codex/2026-07-20/project-users-shiyili-documents-codex-2026/new_d1_schema_design_2026_08_13"
+cd "/path/to/hirebeat-recruiting-d1-v2-schema"
 ```
 
 安装本地 Wrangler：
@@ -158,12 +160,11 @@ bucket_name = "hirebeat-hr-raw-resumes-pdf-r2-v1"
 
 ### Submission Ingress Worker 验证
 
-当前 staging Cloudflare 账户没有托管域名，因此仅
-`workers/submission-ingress/wrangler.toml` 临时启用稳定的 `workers.dev`
-target，并关闭 preview URLs。所有写入端点仍必须验证
-`INGRESS_INTERNAL_AUTH_TOKEN`。Production 必须重新设为
-`workers_dev = false` 并使用公司自有 Custom Domain；不得把这一 staging
-例外直接提升到 Production。
+当前 staging Cloudflare 账户没有托管域名，因此
+`workers/submission-ingress/wrangler.toml` 使用稳定的 `workers.dev` target 并关闭
+preview URLs。所有写入端点仍必须验证 `INGRESS_INTERNAL_AUTH_TOKEN`。Production
+使用隔离配置及受保护路由；公司自有 Custom Domain 可用后再迁移并复验 Access，
+该域名迁移是记录在案的非阻塞后续事项，不改变当前 readiness PASS。
 
 独立 Worker package 位于 `workers/submission-ingress/`。它已经接通 Airtable/Google adapter、R2、Parser、D1 原子发布和 Workflow A Outbox；部署前必须先配置真实私有服务 URL、Secrets，并在 staging 做端到端验证：
 
@@ -516,3 +517,27 @@ cloudflared access curl \
 短事务中旋转 recovery fence、写入 Outbox 和审计记录；Orchestrator 将事件
 转发到原 Intake Queue。不要把 token、service-account JSON、PDF 或完整申请
 payload 放进命令、reason 或日志。
+
+## 16. Production deployment closeout
+
+Production D1 migrations, isolated runtime resources, protected Worker and
+Operations API deployments, Parser/ML smoke tests, controlled synthetic Google
+Form provider flow, persisted observability, scheduled runtime monitoring,
+controlled notification failure/recovery, and Operations API rollback/forward
+restoration have passed. The minimum production Catalog write acceptance also
+passed through the Access-protected Operations API.
+
+Current final status:
+
+- `FINAL_PRODUCTION_RUNTIME_READINESS=PASS`
+- `FINAL_PRODUCTION_OPERATIONAL_READINESS=PASS`
+- `FINAL_COMPANY_INDEPENDENCE_READINESS=DEFERRED`
+- `PRODUCTION_GO_LIVE_READINESS=PASS_WITH_DOCUMENTED_DEFERRED_HANDOVER`
+
+The deferred boundary is intentionally narrow: a company-controlled Google
+Workspace account must recreate both Apps Script installable triggers, complete
+a new synthetic production acceptance under the new execution identity, rotate
+affected credentials, and remove or reduce personal-account access. Initial
+bulk Reference/Catalog CSV import also remains deferred; the already-passed
+minimum Catalog write acceptance is not deferred, and future bulk writes must
+go through the Operations API rather than direct D1 SQL.

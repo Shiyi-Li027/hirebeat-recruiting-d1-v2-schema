@@ -399,7 +399,7 @@ Orchestrator 首次部署、管理员受限的 Operations API 部署与 Access �
 production Parser/ML 最小非写入 runtime smoke。它不代表 company-owned custom
 domain、provider channel、广泛业务用户访问或真实业务流量已经启用。
 
-Production 部署前仍必须完成：
+以下是初始 production 部署阶段的检查清单。其 runtime、provider-path、监控、通知与 Operations API 回滚项目此后均已完成；保留该清单作为实施历史，不再把已通过事项解释为当前 pending：
 
 1. 独立的 production D1、R2、Queue、DLQ、Resume Parser、ML 服务、
    Submission Ingress、ETL Orchestrator、Workflows 和 Operations API 已创建或
@@ -417,8 +417,8 @@ Production 部署前仍必须完成：
    通过真实 Google Form Catalog Sync 验证；如 production 需要依赖
    `failed_retryable` 自动恢复，还必须先补齐自动重试 dispatcher。
 6. production Parser/ML service URL、服务间认证和最小权限调用身份已配置，且
-   最小非写入 runtime smoke 已通过；仍需完成 provider-path 端到端验收、
-   失败路径验证、持续监控、告警和回滚验收。
+   最小非写入 runtime smoke、provider-path 端到端验收、持续监控、受控失败通知与
+   Operations API 回滚/前向恢复均已通过。
 7. 使用 production importer 提供经过审核的首批 Reference/Catalog 数据；
    不从旧 D1 或 staging D1 复制未经审核的运行数据。
 8. 任何曾经在附件、截图或聊天记录中显示过的密钥都不得直接作为 production
@@ -468,22 +468,6 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 
 ## Production Google Form provider 端到端验收（2026-08-22）
 
-受控 synthetic production provider 路径已通过验收：
-
-`Google Form → Apps Script provider bridge → Cloudflare Access 保护的 Submission Ingress → D1/R2 → Intake Queue → ETL Workflows → Parser/ML`
-
-- 3 次受控 synthetic 表单提交均完成；
-- Apps Script `onHireBeatFormSubmit` 执行成功；
-- Intake Queue 写入 3、确认 3、重试 0，并恢复为 0 backlog；
-- DLQ 无未确认消息；
-- R2 已生成 `raw-resumes/v1` 和 `intake-replay-envelopes/v1` 对象；
-- D1 形成 3 个 `application`、3 个 `ml_analysis_run`，外键违规为 0；
-- `person = 2`、`application = 3` 是预期的身份去重与复用结果。
-
-决策：最小受控 production provider 路径判定为 **PASS**。该结论不等于允许广泛真实候选人流量；监控与告警、故障路径、回滚验证、运维责任确认及业务上线审批仍为独立前置条件。
-
-## Production Google Form provider 端到端验收（2026-08-22）
-
 受控的 synthetic production provider 路径已经完成端到端验收并通过：
 
 - 3 条 synthetic Google Form submission 已通过 Apps Script 和受 Cloudflare Access 保护的 production Submission Ingress 接收；
@@ -494,7 +478,7 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 - production R2 的 `raw-resumes/v1` 与 `intake-replay-envelopes/v1` 均存在对应的 3 组 UUID artifact；
 - 外键检查结果为 0 个违规。
 
-该结果只证明受控 synthetic production provider 路径可运行，不代表已经批准接收广泛真实申请人流量。正式开放前仍需完成监控与告警、失败路径、回滚、值班归属和最终 launch approval。
+该结果只证明受控 synthetic production provider 路径可运行，不代表批准不受限制的真实申请人流量。监控、受控失败通知、Operations API 回滚/前向恢复和最终 readiness audit 此后均已通过；公司账号交接仍按最终 deferred 边界管理。
 
 ## Production Google Form Catalog 同步决策（2026-08-22）
 
@@ -522,7 +506,7 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 - 临时 `verifyProductionIngressObservability()` 已删除；`onHireBeatFormSubmit` 与每五分钟 `syncHireBeatCatalogOptions` 两个既有触发器保持不变。
 - 本次健康检查没有写入 D1，也没有提交 Queue 或 Workflow 消息。
 
-以上只确认日志持久化和基础可见性；主动告警、受控失败路径监控与回滚验证仍待完成。
+以上段落只记录当时的日志持久化和基础可见性范围；受控监控失败、通知送达、恢复以及 Operations API 回滚/前向恢复随后均已通过。
 
 ## Production 定时运行时监控验收（2026-08-23）
 

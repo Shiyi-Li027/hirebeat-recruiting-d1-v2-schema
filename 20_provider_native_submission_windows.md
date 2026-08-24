@@ -1,7 +1,7 @@
 # Provider-native Airtable and Google Form submission windows
 
 Version date: 2026-08-19
-Status: Google Form staging provider window enabled and accepted; Airtable provider window remains pending
+Status: Google Form staging and controlled synthetic production paths accepted; Airtable provider window remains deferred; company-account trigger handover remains deferred
 
 ## 1. Confirmed boundary
 
@@ -196,7 +196,7 @@ lineage remains understandable.
 - Store all D1 timestamps in UTC. Apps Script uses `America/New_York` only as
   the business/display timezone.
 
-## 6. Current activation status and remaining work
+## 6. Current activation status and deferred handover
 
 The Google Form staging provider-native path is enabled and accepted. Its
 end-to-end evidence is recorded in `17_staging_end_to_end_acceptance_plan.md`
@@ -209,26 +209,38 @@ and the staging closeout report:
 - Offer `5` was created in `draft` status.
 - New Google Form responses are delivered to staging Intake in real time.
 
-The Airtable submission and Catalog synchronization windows are intentionally
-deferred. They are not required for the currently accepted Google Form staging
-channel.
+The controlled synthetic production Google Form path has also passed. Three
+synthetic submissions exercised Apps Script, Access-protected Ingress, R2,
+Queue/DLQ, D1, Workflow A/B, Parser and ML with zero foreign-key violations;
+the final closeout evidence also confirms the provider flow reached Offer
+processing. Runtime monitoring, controlled notification failure/recovery and
+Operations API rollback/forward restoration passed afterward.
 
-Before enabling a production provider-native submission window:
+The Airtable submission and Catalog synchronization windows remain
+intentionally deferred. They are not required for the accepted Google Form
+production runtime and do not block the final readiness result.
 
-1. Create production-specific Google Form and bound Apps Script configuration,
-   or approve an equivalent isolated production provider configuration.
-2. Configure production-only Ingress and Operations endpoints, provider
-   identifiers, Cloudflare Access service credentials, and application Secrets.
-3. Do not reuse staging service tokens, authentication tokens, Form identifiers,
-   runtime bindings, or other Secrets.
-4. The implemented `catalog_sync_run` and
-   `catalog_sync_target_run` result-reporting path has passed a real Google Form
-   Catalog Sync in staging. Add an automatic retry dispatcher before relying on
-   `failed_retryable` recovery in production.
-5. After protected production deployment approval, submit one synthetic
-   production smoke-test application and verify Intake, Workflow A,
-   Application lineage, Workflow B, ML, and Offer evidence before opening the
-   production channel.
+The Apps Script project currently retains two installable triggers:
 
-Production provider activation must remain blocked until these requirements
-are complete.
+- `onHireBeatFormSubmit` for provider submissions;
+- `syncHireBeatCatalogOptions` on the verified five-minute schedule.
+
+Their transfer to a company-controlled Google Workspace account remains
+deferred. During handover, the company account must recreate both triggers,
+complete Google authorization, run a new synthetic production acceptance under
+the new execution identity, confirm no duplicate processing, rotate affected
+credentials, and only then remove the old triggers and reduce or remove the
+personal account's access. Until all steps pass,
+`FINAL_COMPANY_INDEPENDENCE_READINESS` remains `DEFERRED`.
+
+Initial bulk Reference/Catalog CSV import also remains deferred. The minimum
+production Catalog write path has already passed through the Access-protected
+Operations API; future bulk import must use that API and must not write D1
+directly.
+
+Current readiness:
+
+- `FINAL_PRODUCTION_RUNTIME_READINESS=PASS`
+- `FINAL_PRODUCTION_OPERATIONAL_READINESS=PASS`
+- `FINAL_COMPANY_INDEPENDENCE_READINESS=DEFERRED`
+- `PRODUCTION_GO_LIVE_READINESS=PASS_WITH_DOCUMENTED_DEFERRED_HANDOVER`
