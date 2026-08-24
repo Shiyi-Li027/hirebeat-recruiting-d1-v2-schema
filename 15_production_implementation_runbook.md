@@ -719,3 +719,31 @@ Production 运行时监控由
 - Queue/DLQ 异常监控设计
 - rollback 验证
 - 公司账号接管后的通知收件人和 monitoring token 轮换
+
+## Production 监控失败路径与通知送达运行手册（2026-08-23）
+
+### 已验证证据
+
+- 失败运行：[`Monitor production runtime endpoints #12`](https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32674785941)
+- 恢复运行：[`Monitor production runtime endpoints #13`](https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32675179763)
+- 验证 commit：`a838798e3e0b740065da4b4c6b09591895f7edca`
+- 失败运行先完成真实只读健康检查，再由 `simulate_failure=true` 主动退出失败。
+- GitHub Inbox 与 GitHub 账户邮箱均收到失败通知。
+- 新运行使用 `simulate_failure=false` 后成功恢复。
+- 两次运行都没有执行生产数据写入、部署或消息投递。
+
+### 日常监控失败处理
+
+1. 打开失败的 `Monitor production runtime endpoints` workflow run。
+2. 查看 Job Summary，确认具体是 Ingress、Operations API、Cloudflare Access authentication，还是受控模拟步骤失败。
+3. 如果运行使用了 `simulate_failure=true`，将其识别为受控测试，不要把它当作真实生产中断。
+4. 如果需要验证恢复，不要点击 `Re-run failed jobs`，因为它会沿用原运行输入。
+5. 返回 workflow 首页，点击 `Run workflow`，选择 `main`。
+6. 输入要求的确认文字，并将 `simulate_failure` 设为 `false`。
+7. 启动新的独立运行，确认两个 `/health` 检查、Access authentication 和整体结论全部为 PASS。
+8. 保存失败运行、通知送达和恢复运行的链接作为审计证据。
+9. 如果非模拟的定时运行失败，应停止发布操作并调查 Access token、Worker deployment、URL、网络及服务健康状态。
+
+### 安全边界
+
+该验收只验证监控失败检测、GitHub 通知和恢复流程，不会故意破坏生产 Worker、D1、Queue、Workflow、Parser、ML 或真实申请数据。真实故障注入和生产回滚验证必须另行审批。
