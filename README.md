@@ -567,3 +567,35 @@ validation. Evidence timestamps below are recorded in UTC on 2026-08-24.
   production Operations API traffic to the forward-restoration version.
 - Both traffic changes required production Environment approval.
 - The rollback workflow performs no D1, Queue, or Workflow mutation.
+
+## Final production readiness status (2026-08-24)
+
+The final production readiness audit reached the following conclusions:
+
+- `FINAL_PRODUCTION_RUNTIME_READINESS=PASS`
+- `FINAL_PRODUCTION_OPERATIONAL_READINESS=PASS`
+- `FINAL_COMPANY_INDEPENDENCE_READINESS=DEFERRED`
+- `PRODUCTION_GO_LIVE_READINESS=PASS_WITH_DOCUMENTED_DEFERRED_HANDOVER`
+
+Validated production evidence includes:
+
+- production configuration, isolation and repository validation passed;
+- protected D1, Worker and Operations API deployments succeeded;
+- production Parser and ML runtime smoke tests passed;
+- the Google Form provider-native path reached Offer processing with synthetic data;
+- D1 foreign-key validation reported zero violations;
+- persisted Worker observability and invocation logs were verified;
+- scheduled runtime monitoring passed for Ingress and Operations API;
+- controlled monitoring failure, notification delivery and recovery passed;
+- Operations API rollback and forward restoration passed;
+- the restored Operations API version receives 100% of production traffic;
+- Cloudflare and Google Cloud live-resource identity checks passed;
+- GitHub production and production-monitoring Environment references passed.
+
+Documented deferred work:
+
+1. A company-controlled Google Workspace account must recreate the two Apps Script installable triggers, complete a new synthetic production acceptance, rotate affected credentials and remove or reduce personal-account access.
+2. The temporary Access-protected `workers.dev` routes should move to reviewed company-owned custom domains when available.
+3. The initial bulk Reference/Catalog CSV importer remains deferred and must use the Operations API rather than direct D1 writes.
+
+These deferred ownership and optimization tasks do not invalidate the verified runtime or operational readiness. They do prevent the project from being described as fully independent of the current personal accounts.
