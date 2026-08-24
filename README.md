@@ -536,3 +536,14 @@ Native Workers/Queues error-threshold notifications were not available in the
 current account UI. Endpoint monitoring is active, while deliberate
 failure-path, rollback, and broader alert-delivery validation remain separate
 follow-up work.
+
+## Production monitoring failure and recovery evidence (2026-08-23)
+
+The protected production runtime monitor passed a controlled failure-and-recovery acceptance on `main` commit `a838798e3e0b740065da4b4c6b09591895f7edca`.
+
+- Intentional failure run [`#12`](https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32674785941) first passed the read-only Submission Ingress and Operations API `/health` checks and Cloudflare Access authentication, then failed intentionally through `simulate_failure=true`.
+- GitHub delivered both the Inbox notification and the account-email failure notification.
+- Fresh recovery run [`#13`](https://github.com/Shiyi-Li027/hirebeat-recruiting-d1-v2-schema/actions/runs/32675179763) used `simulate_failure=false` and completed successfully.
+- Neither run deployed code, wrote D1, submitted Queue or Workflow messages, or used production applicant or resume data.
+
+This proves that the monitor can surface a controlled failure, deliver notifications, and return to green. It does not replace a later real-outage or rollback drill.

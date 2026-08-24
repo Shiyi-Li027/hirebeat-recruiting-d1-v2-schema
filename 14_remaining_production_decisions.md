@@ -544,3 +544,16 @@ D01-D15 已全部确认。后续实现不得重新询问这些决定；只有发
 Budget Alert。由于当前账户界面没有提供可用的 Workers/Queues
 错误阈值通知，端点可用性监控已经完成，但主动故障注入、失败路径告警、
 告警送达演练和 rollback 验证仍作为独立后续事项保留。
+
+## Production 监控失败、通知与恢复验收（2026-08-23）
+
+状态：**PASS（受控失败路径）**。
+
+- `main` commit `a838798e3e0b740065da4b4c6b09591895f7edca` 的手工运行 `#12` 在真实只读健康检查全部通过后，由 `simulate_failure=true` 主动产生失败。
+- 失败前已确认 Submission Ingress `/health`、Operations API `/health` 和 Cloudflare Access service authentication 均为 PASS。
+- 失败运行没有修改 D1，没有发送 Queue 或 Workflow 消息，也没有使用生产申请人或简历数据。
+- GitHub Inbox 与 GitHub 账户邮箱均成功收到 workflow 失败通知。
+- 新启动的独立恢复运行 `#13` 使用 `simulate_failure=false`，并在相同 commit 上成功完成。
+- 没有使用 `Re-run failed jobs`，因为该操作会保留原运行的 `simulate_failure=true` 输入并再次产生预期失败。
+
+结论：生产运行时监控的安全失败、通知送达和恢复到绿色状态已经通过验收。真实服务中断、自动化故障处置和生产回滚演练仍属于独立的后续工作。
