@@ -707,3 +707,37 @@ Installable Trigger 以创建该触发器的 Google 账号身份运行。共享 
 3. 运行 production runtime monitor。
 4. 降低或移除个人账号权限。
 5. 将本事项从 `DEFERRED` 更新为 `COMPLETE`。
+
+## 最终 Readiness 与项目交接状态（2026-08-24）
+
+当前结论：
+
+- `FINAL_PRODUCTION_RUNTIME_READINESS=PASS`
+- `FINAL_PRODUCTION_OPERATIONAL_READINESS=PASS`
+- `FINAL_COMPANY_INDEPENDENCE_READINESS=DEFERRED`
+- `PRODUCTION_GO_LIVE_READINESS=PASS_WITH_DOCUMENTED_DEFERRED_HANDOVER`
+
+production 基础设施、受保护部署、provider-native E2E、运行时监控、失败通知、恢复以及 Operations API 回滚与前向恢复已经通过验证。
+
+但是，完整项目交接不能仅依赖共享文件或添加管理员邮箱。以下实际换主动作仍未执行：
+
+1. 公司控制的 Google Workspace 账号接管 Google Form、Drive、响应表及 Apps Script 管理权限。
+2. 公司账号重新创建 `onHireBeatFormSubmit` 和 `syncHireBeatCatalogOptions` 两个 installable triggers。
+3. 公司账号完成授权，并在新的触发器执行身份下提交一条新的、明确标记为 synthetic 的 production 验收申请。
+4. 验证 Ingress、R2、Queue、D1、Parser、ML、Workflow 和最终业务状态，且没有重复处理。
+5. 轮换个人账号曾接触的 Service Token、内部认证 Token 和其他生产凭据。
+6. 更新 Cloudflare、GitHub Environment 和 Apps Script 中的对应凭据。
+7. 再次运行 production runtime monitor。
+8. 最后降低或移除个人账号权限，并验证公司拥有账号与 MFA 恢复能力。
+
+在上述步骤完成前：
+
+- 不得删除当前可用的个人账号触发器；
+- 不得宣称项目已经完全脱离个人账号；
+- 本交接状态必须保持 `DEFERRED`；
+- 已有 staging synthetic evidence 可以作为功能基线，但不能代替执行身份改变后的新 production synthetic 验收。
+
+完成全部换主步骤后，才可以将
+公司独立性状态 `DEFERRED`
+更新为
+公司独立性状态 `PASS`。

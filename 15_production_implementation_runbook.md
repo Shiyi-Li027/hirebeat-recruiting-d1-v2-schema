@@ -799,3 +799,59 @@ Production 运行时监控由
 
 GitHub Actions 中出现的 Node.js 20 deprecation annotation 是非阻塞维护告警，
 不影响本次回滚结果；后续应随官方 Action runtime 升级单独处理。
+
+## 最终 Production Readiness 收尾审计及放行判定（2026-08-24）
+
+最终状态：
+
+- `FINAL_PRODUCTION_RUNTIME_READINESS=PASS`
+- `FINAL_PRODUCTION_OPERATIONAL_READINESS=PASS`
+- `FINAL_COMPANY_INDEPENDENCE_READINESS=DEFERRED`
+- `PRODUCTION_GO_LIVE_READINESS=PASS_WITH_DOCUMENTED_DEFERRED_HANDOVER`
+
+### 已完成的审计
+
+1. production 配置模板、D1、R2、Queue、Workflow 和 staging 隔离检查通过。
+2. GitHub `production` 与 `production-monitoring` Environment 所需 Secrets 和 Variables 均存在。
+3. Cloudflare D1、R2、Queues 和三个 production Workers 的身份及部署历史通过检查。
+4. Google Cloud production project、Cloud Run services、invoker IAM、非公开访问和 production traffic 通过检查。
+5. production Google Form、Drive、Apps Script Properties、两个触发器及执行记录通过人工检查。
+6. synthetic provider-native E2E 验收已覆盖 Ingress、R2、Queue、D1、Parser、ML、Workflow 和 Offer。
+7. runtime monitor 的手动及定时运行通过。
+8. 受控监控失败、GitHub Inbox/邮件通知及独立恢复运行通过。
+9. Operations API 回滚到已知良好版本和恢复至前向版本均通过，恢复后监控再次通过。
+
+### 当前日常运行要求
+
+- 每 15 分钟的 production runtime monitor 应保持成功；
+- Apps Script 的 `syncHireBeatCatalogOptions` 定时触发器和 `onHireBeatFormSubmit` 提交触发器应保持启用；
+- 新增或更新岗位后必须先发布 Catalog Revision；
+- 紧急同步可以手工执行 `syncHireBeatCatalogOptions()`，否则等待定时同步；
+- 任何 production 部署或回滚必须使用受保护 workflow、准确确认文本和 Environment 审批；
+- 不得通过 D1 Console 绕过 Operations API 写入 Catalog 业务数据；
+- 不得使用真实申请人数据执行故障演练。
+
+### 告警或监控失败处理
+
+1. 打开失败的 GitHub Actions run，确认失败发生在哪个只读健康检查。
+2. 检查 Cloudflare Access Service Token 是否过期或被撤销。
+3. 检查 Ingress 和 Operations API observability。
+4. 检查 Cloudflare、GitHub Actions 和 Google Cloud 服务状态。
+5. 修复后创建新的正常 monitoring run；不要通过重跑带 `simulate_failure=true` 的历史 run 验证恢复。
+6. 若 Operations API 版本异常，使用受保护 rollback workflow。
+7. 恢复后记录监控、回滚、通知和资源状态证据。
+
+### Deferred 交接边界
+
+实际 Apps Script trigger ownership transfer 尚未执行。执行时必须使用
+`21_complete_project_handover_runbook.md` 中的换主 SOP，并满足以下条件：
+
+- 公司控制的 Google Workspace 账号具有所需权限；
+- 公司账号重新创建两个 installable triggers；
+- 公司账号完成 Google 授权；
+- 新执行身份下完成一条新的 synthetic production submission；
+- 确认无重复处理且流程到达预期终点；
+- 轮换个人账号曾接触的相关凭据；
+- 最后才删除旧触发器并降低或移除个人账号权限。
+
+在这些条件完成前，不得把 company independence 状态从 `DEFERRED` 改为 `PASS`。
